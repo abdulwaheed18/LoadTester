@@ -69,3 +69,66 @@ loadtester/
 │  └─ test
 │     └─ java (optional—add unit tests here)
 └─ loadtester.zip (if you distribute a ZIP)
+
+```
+
+---
+
+## Prerequisites
+
+LoadTester requires the following tools to build and run:
+
+- **Java 17** – set `JAVA_HOME` to a JDK 17 installation.
+- **Maven 3.8+** – used for building the Spring Boot application.
+
+---
+
+## Configuration
+
+All behavior is driven from `src/main/resources/application.yml`. Each entry
+under `loadtester.targets` describes an endpoint to exercise:
+
+| Field | Description |
+|-------|-------------|
+| `name` | Logical name for the target; used in logs. |
+| `url` | Full URL to invoke. |
+| `method` | HTTP method (e.g. `GET`, `POST`). |
+| `headers` | Optional map of request headers. |
+| `payloadPath` | Resource location of the request body (for POST/PUT). |
+| `desiredTps` | Target requests per second for this endpoint. |
+| `throttleIntervalMs` | Minimum interval (ms) between requests. |
+
+Refer to the example `application.yml` for a sample configuration.
+
+---
+
+## Building the Project
+
+From the project root run:
+
+```bash
+mvn package
+```
+
+The built JAR will be located in `target/`, e.g.
+`target/loadtester-0.0.1-SNAPSHOT.jar`.
+
+---
+
+## Running LoadTester
+
+After building, execute the JAR with Java:
+
+```bash
+java -jar target/loadtester-0.0.1-SNAPSHOT.jar
+```
+
+You can override the configuration file via Spring Boot’s standard mechanisms,
+for example:
+
+```bash
+java -jar target/loadtester-0.0.1-SNAPSHOT.jar \
+  --spring.config.location=classpath:/application.yml
+```
+
+---
