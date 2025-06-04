@@ -1,11 +1,43 @@
+spring:
+  application:
+    name: loadtester # Sets a global tag for metrics
+
 loadtester:
   targets:
-    - name: serviceA
-      url: https://dummyjson.com/auth/RESOURCE
+    - name: Testing
+      url: https://dummyjson.com/auth/login
       method: POST
       headers:
-        Authorization: "Bearer SOME_TOKEN"
         Content-Type: "application/json"
       payloadPath: classpath:payloads/foo.json
-      desiredTps: 300
-      throttleIntervalMs: 10
+      desiredTps: 1 # Adjusted for practical testing; was 300
+      throttleIntervalMs: 1000 # e.g., 1 request every 1000ms max if desiredTps is high
+  reporting:
+    periodic:
+      enabled: true # Set to true to enable periodic summary reports
+      summaryIntervalMs: 60000 # Log summary report every 60 seconds (60000 ms)
+    shutdown:
+      enabled: true # Set to true to enable summary report on application shutdown
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,prometheus,metrics" # Expose these actuator endpoints
+  metrics:
+    tags: # Global tags applied to all metrics
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        # Enable histogram data for latency metrics to allow server-side percentile calculation (e.g., in Prometheus)
+        http.server.requests: true
+        loadtester.request.latency: true # Custom timer name
+      sla:
+        # Define Service Level Objectives for latency (optional, for specific timers)
+        loadtester.request.latency: 100ms, 250ms, 500ms, 1s # Example SLAs for latency timer
+
+# Logging configuration (optional, for more detailed output)
+logging:
+  level:
+    com.example.loadtester: DEBUG # Set to INFO for less verbose output in production
+    io.netty.util.internal.PlatformDependent: WARN # Quiets down Netty noise on startup

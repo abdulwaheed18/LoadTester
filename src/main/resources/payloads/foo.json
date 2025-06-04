@@ -1,3 +1,5 @@
 {
-  "sampleField": "sampleValue"
+  "username": "emilys",
+  "password": "emilyspass",
+  "expiresInMins": 3600
 }
