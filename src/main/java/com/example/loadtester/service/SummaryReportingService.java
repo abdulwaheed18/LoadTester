@@ -5,11 +5,21 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Timer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
+import org.thymeleaf.templatemode.TemplateMode;
+import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 import javax.annotation.PreDestroy;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -19,13 +29,42 @@ public class SummaryReportingService {
     private static final Logger logger = LoggerFactory.getLogger(SummaryReportingService.class);
     private final MeterRegistry meterRegistry;
     private final LoadTesterProperties properties;
-    private final LoadEmitterService loadEmitterService; // To stop emitters on shutdown
+    private final LoadEmitterService loadEmitterService;
+    private final TemplateEngine templateEngine;
 
-    public SummaryReportingService(MeterRegistry meterRegistry, LoadTesterProperties properties, LoadEmitterService loadEmitterService) {
+    public SummaryReportingService(MeterRegistry meterRegistry,
+                                   LoadTesterProperties properties,
+                                   LoadEmitterService loadEmitterService) {
         this.meterRegistry = meterRegistry;
         this.properties = properties;
         this.loadEmitterService = loadEmitterService;
+
+        // Initialize Thymeleaf Template Engine
+        ClassLoaderTemplateResolver templateResolver = new ClassLoaderTemplateResolver();
+        templateResolver.setSuffix(".html");
+        templateResolver.setTemplateMode(TemplateMode.HTML);
+        templateResolver.setCharacterEncoding("UTF-8");
+        templateResolver.setPrefix("templates/"); // Path to templates in src/main/resources
+        this.templateEngine = new TemplateEngine();
+        this.templateEngine.setTemplateResolver(templateResolver);
     }
+
+    // Data structure for report
+    public static class TargetReportData {
+        public String name, url, method;
+        public int desiredTps;
+        public double initiatedRequests, throttledRequests, backpressureDroppedRequests, successfulRequests, failedRequests;
+        public LatencyData latencyData;
+    }
+
+    public static class LatencyData {
+        public double avg, max;
+        public long count;
+        public LatencyData(double avg, double max, long count) {
+            this.avg = avg; this.max = max; this.count = count;
+        }
+    }
+
 
     public void generateAndLogSummaryReport() {
         if (properties.getTargets() == null || properties.getTargets().isEmpty()) {
@@ -36,64 +75,87 @@ public class SummaryReportingService {
         long reportStartTime = System.currentTimeMillis();
         logger.info("Generating Load Test Summary Report...");
 
-        StringBuilder report = new StringBuilder("\n\n--- Load Test Summary Report ---\n");
-        report.append(String.format("Report Time: %s\n", java.time.LocalDateTime.now()));
-        report.append("--------------------------------------------------\n");
+        List<TargetReportData> targetReportsData = new ArrayList<>();
+        StringBuilder consoleReport = new StringBuilder("\n\n--- Load Test Summary Report (Console) ---\n");
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        consoleReport.append(String.format("Report Time: %s\n", timestamp));
+        consoleReport.append("--------------------------------------------------\n");
 
         for (LoadTesterProperties.TargetEndpoint target : properties.getTargets()) {
-            String targetName = target.getName();
-            report.append(String.format("\nTarget: %s (URL: %s, Method: %s)\n",
-                    targetName, target.getUrl(), target.getMethod()));
-            report.append(String.format("  Desired TPS: %s\n",
-                    target.getDesiredTps() == 0 ? "Max Effort" : target.getDesiredTps()));
+            TargetReportData data = new TargetReportData();
+            data.name = target.getName();
+            data.url = target.getUrl();
+            data.method = target.getMethod();
+            data.desiredTps = target.getDesiredTps();
 
-            // Fetch metrics
-            double initiated = getCounterValue("loadtester.requests.initiated", "target", targetName);
-            double throttled = getCounterValue("loadtester.requests.throttled", "target", targetName);
-            double backpressureDropped = getCounterValue("loadtester.requests.backpressure.dropped", "target", targetName);
+            data.initiatedRequests = getCounterValue("loadtester.requests.initiated", "target", data.name);
+            data.throttledRequests = getCounterValue("loadtester.requests.throttled", "target", data.name);
+            data.backpressureDroppedRequests = getCounterValue("loadtester.requests.backpressure.dropped", "target", data.name);
 
-            report.append(String.format("  Requests Initiated: %.0f\n", initiated));
-            report.append(String.format("  Requests Throttled (by RateLimiter): %.0f\n", throttled));
-            report.append(String.format("  Requests Dropped (by Backpressure): %.0f\n", backpressureDropped));
-
-
-            List<Tag> successTags = new ArrayList<>();
-            successTags.add(Tag.of("target", targetName));
-            successTags.add(Tag.of("outcome", "success"));
-            // Iterate over possible HTTP status codes for successes if needed, or sum them up.
-            // For simplicity, summing all successful outcomes:
-            double successful = meterRegistry.find("loadtester.requests.completed").tags(successTags).counters()
+            List<Tag> successOutcomeTags = List.of(Tag.of("target", data.name), Tag.of("outcome", "success"));
+            data.successfulRequests = meterRegistry.find("loadtester.requests.completed").tags(successOutcomeTags).counters()
                     .stream().mapToDouble(Counter::count).sum();
-            report.append(String.format("  Successful Requests (Sum of 2xx): %.0f\n", successful));
 
-
-            List<Tag> failureTags = new ArrayList<>();
-            failureTags.add(Tag.of("target", targetName));
-            failureTags.add(Tag.of("outcome", "failure"));
-            // Sum all failed outcomes:
-            double failed = meterRegistry.find("loadtester.requests.completed").tags(failureTags).counters()
+            List<Tag> failureOutcomeTags = List.of(Tag.of("target", data.name), Tag.of("outcome", "failure"));
+            data.failedRequests = meterRegistry.find("loadtester.requests.completed").tags(failureOutcomeTags).counters()
                     .stream().mapToDouble(Counter::count).sum();
-            report.append(String.format("  Failed Requests (Sum of non-2xx/errors): %.0f\n", failed));
 
-
-            Timer latencyTimer = meterRegistry.find("loadtester.request.latency").tag("target", targetName).timer();
-            if (latencyTimer != null) {
-                report.append(String.format("  Latency (ms): Avg=%.2f, Max=%.2f, Count=%.0f\n",
+            Timer latencyTimer = meterRegistry.find("loadtester.request.latency").tag("target", data.name).timer();
+            if (latencyTimer != null && latencyTimer.count() > 0) {
+                data.latencyData = new LatencyData(
                         latencyTimer.mean(TimeUnit.MILLISECONDS),
                         latencyTimer.max(TimeUnit.MILLISECONDS),
-                        (double)latencyTimer.count()
-                ));
-                // For percentiles, you'd query Prometheus or use specific Micrometer features if pre-computed
-                // e.g., latencyTimer.percentile(0.95, TimeUnit.MILLISECONDS) if available and configured
-            } else {
-                report.append("  Latency (ms): No latency data recorded.\n");
+                        latencyTimer.count()
+                );
             }
-            report.append("--------------------------------------------------\n");
+            targetReportsData.add(data);
+
+            // Append to console report
+            consoleReport.append(String.format("\nTarget: %s (URL: %s, Method: %s)\n",
+                    data.name, data.url, data.method));
+            consoleReport.append(String.format("  Desired TPS: %s\n",
+                    data.desiredTps == 0 ? "Max Effort" : data.desiredTps));
+            consoleReport.append(String.format("  Requests Initiated: %.0f\n", data.initiatedRequests));
+            consoleReport.append(String.format("  Requests Throttled (Rate Limiter): %.0f\n", data.throttledRequests));
+            consoleReport.append(String.format("  Requests Dropped (Backpressure): %.0f\n", data.backpressureDroppedRequests));
+            consoleReport.append(String.format("  Successful Requests (2xx): %.0f\n", data.successfulRequests));
+            consoleReport.append(String.format("  Failed Requests (non-2xx/errors): %.0f\n", data.failedRequests));
+            if (data.latencyData != null) {
+                consoleReport.append(String.format("  Latency (ms): Avg=%.2f, Max=%.2f, Count=%d\n",
+                        data.latencyData.avg, data.latencyData.max, data.latencyData.count));
+            } else {
+                consoleReport.append("  Latency (ms): No latency data recorded.\n");
+            }
+            consoleReport.append("--------------------------------------------------\n");
         }
-        report.append("--- End of Report ---\n");
-        logger.info(report.toString());
+        consoleReport.append("--- End of Console Report ---\n");
+        logger.info(consoleReport.toString());
+
+        // Generate HTML Report if enabled
+        if (properties.getReporting().getHtml().isEnabled()) {
+            generateHtmlReport(targetReportsData, timestamp);
+        }
+
         logger.info("Summary Report generation took {} ms.", (System.currentTimeMillis() - reportStartTime));
     }
+
+    private void generateHtmlReport(List<TargetReportData> targetReportsData, String reportTimestamp) {
+        Context context = new Context();
+        context.setVariable("reportTimestamp", reportTimestamp);
+        context.setVariable("runDurationMinutes", properties.getRunDurationMinutes());
+        context.setVariable("targetReports", targetReportsData);
+
+        String reportFilePath = properties.getReporting().getHtml().getFilePath();
+        try (FileWriter writer = new FileWriter(reportFilePath)) {
+            templateEngine.process("summary-report", context, writer); // Template name without .html
+            logger.info("HTML summary report generated successfully at: {}", Paths.get(reportFilePath).toAbsolutePath());
+        } catch (IOException e) {
+            logger.error("Failed to write HTML summary report to file: {}", reportFilePath, e);
+        } catch (Exception e) {
+            logger.error("Error generating HTML report", e);
+        }
+    }
+
 
     private double getCounterValue(String name, String... tags) {
         Counter counter = meterRegistry.find(name).tags(tags).counter();
@@ -103,7 +165,7 @@ public class SummaryReportingService {
     @PreDestroy
     public void onShutdown() {
         logger.info("Application shutting down. Stopping emitters and generating final summary report...");
-        loadEmitterService.stopAllEmitters(); // Ensure emitters are stopped
+        loadEmitterService.stopAllEmitters();
         if (properties.getReporting().getShutdown().isEnabled()) {
             generateAndLogSummaryReport();
         } else {
@@ -111,3 +173,4 @@ public class SummaryReportingService {
         }
     }
 }
+    

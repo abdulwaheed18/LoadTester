@@ -3,21 +3,34 @@ spring:
     name: loadtester # Sets a global tag for metrics
 
 loadtester:
+  runDurationMinutes: 1 # Application will run for 5 minutes then shutdown. 0 or negative means run indefinitely.
   targets:
-    - name: Testing
+    - name: API1
       url: https://dummyjson.com/auth/login
       method: POST
       headers:
         Content-Type: "application/json"
       payloadPath: classpath:payloads/foo.json
       desiredTps: 1 # Adjusted for practical testing; was 300
-      throttleIntervalMs: 1000 # e.g., 1 request every 1000ms max if desiredTps is high
+      throttleIntervalMs: 2000 # e.g., 1 request every 2000ms max if desiredTps is high
+    - name: API2
+      url: https://dummyjson.com/auth/login
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      payloadPath: classpath:payloads/foo.json
+      desiredTps: 2 # Adjusted for practical testing; was 300
+      throttleIntervalMs: 3000 # e.g., 1 request every 2000ms max if desiredTps is high
   reporting:
     periodic:
       enabled: true # Set to true to enable periodic summary reports
       summaryIntervalMs: 60000 # Log summary report every 60 seconds (60000 ms)
     shutdown:
       enabled: true # Set to true to enable summary report on application shutdown
+    html:
+      enabled: true # Enable HTML report generation on shutdown
+      filePath: "./loadtest-summary-report.html" # Path to save the HTML report
+
 
 management:
   endpoints:

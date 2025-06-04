@@ -2,19 +2,31 @@ package com.example.loadtester.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
-import org.springframework.validation.annotation.Validated; // For validation if you add JSR 303
+import org.springframework.validation.annotation.Validated;
 
-import javax.validation.constraints.Min; // Example validation
-import javax.validation.constraints.NotBlank; // Example validation
+import javax.validation.constraints.Min;
+import javax.validation.constraints.NotBlank;
 import java.util.List;
 import java.util.Map;
 
 @Component
 @ConfigurationProperties(prefix = "loadtester")
-@Validated // Enable validation if you add constraints
+@Validated
 public class LoadTesterProperties {
+
+    @Min(value = 0, message = "Run duration must be 0 (indefinite) or positive.")
+    private int runDurationMinutes = 0; // Default to run indefinitely
+
     private List<TargetEndpoint> targets;
-    private Reporting reporting = new Reporting(); // Initialize with default values
+    private Reporting reporting = new Reporting();
+
+    public int getRunDurationMinutes() {
+        return runDurationMinutes;
+    }
+
+    public void setRunDurationMinutes(int runDurationMinutes) {
+        this.runDurationMinutes = runDurationMinutes;
+    }
 
     public List<TargetEndpoint> getTargets() {
         return targets;
@@ -40,7 +52,7 @@ public class LoadTesterProperties {
         @NotBlank(message = "Target method must not be blank")
         private String method;
         private Map<String, String> headers;
-        private String payloadPath; // Can be null for GET, DELETE etc.
+        private String payloadPath;
         @Min(value = 0, message = "Desired TPS must be non-negative. Use 0 for max effort without specific TPS target.")
         private int desiredTps;
         @Min(value = 0, message = "Throttle interval must be non-negative. Use 0 for no specific throttle.")
@@ -77,15 +89,18 @@ public class LoadTesterProperties {
     public static class Reporting {
         private Periodic periodic = new Periodic();
         private Shutdown shutdown = new Shutdown();
+        private Html html = new Html(); // Added HTML reporting config
 
         public Periodic getPeriodic() { return periodic; }
         public void setPeriodic(Periodic periodic) { this.periodic = periodic; }
         public Shutdown getShutdown() { return shutdown; }
         public void setShutdown(Shutdown shutdown) { this.shutdown = shutdown; }
+        public Html getHtml() { return html; } // Getter for HTML config
+        public void setHtml(Html html) { this.html = html; } // Setter for HTML config
 
         public static class Periodic {
             private boolean enabled = true;
-            private long summaryIntervalMs = 60000; // 60 seconds
+            private long summaryIntervalMs = 60000;
 
             public boolean isEnabled() { return enabled; }
             public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -99,5 +114,16 @@ public class LoadTesterProperties {
             public boolean isEnabled() { return enabled; }
             public void setEnabled(boolean enabled) { this.enabled = enabled; }
         }
+
+        public static class Html { // New inner class for HTML report settings
+            private boolean enabled = true;
+            private String filePath = "./loadtest-summary-report.html"; // Default file path
+
+            public boolean isEnabled() { return enabled; }
+            public void setEnabled(boolean enabled) { this.enabled = enabled; }
+            public String getFilePath() { return filePath; }
+            public void setFilePath(String filePath) { this.filePath = filePath; }
+        }
     }
 }
+    

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Load Test Summary Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #4CAF50;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+            margin-top: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f0f0f0;
+            color: #555;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 0.9em;
+            color: #777;
+        }
+        .metric-value {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Load Test Summary Report</h1>
+    <p><strong>Report Generated:</strong> <span th:text="${reportTimestamp}"></span></p>
+    <p><strong>Total Run Duration (configured):</strong> <span th:text="${runDurationMinutes == 0 ? 'Indefinite' : runDurationMinutes + ' minutes'}"></span></p>
+
+    <div th:each="targetReport : ${targetReports}">
+        <h2 th:text="'Target: ' + ${targetReport.name}">Target Details</h2>
+        <table>
+            <tr>
+                <td>URL</td>
+                <td class="metric-value" th:text="${targetReport.url}"></td>
+            </tr>
+            <tr>
+                <td>Method</td>
+                <td class="metric-value" th:text="${targetReport.method}"></td>
+            </tr>
+            <tr>
+                <td>Desired TPS</td>
+                <td class="metric-value" th:text="${targetReport.desiredTps == 0 ? 'Max Effort' : targetReport.desiredTps}"></td>
+            </tr>
+            <tr>
+                <td>Requests Initiated</td>
+                <td class="metric-value" th:text="${#numbers.formatDecimal(targetReport.initiatedRequests, 0, 'COMMA', 0, 'POINT')}"></td>
+            </tr>
+            <tr>
+                <td>Requests Throttled (Rate Limiter)</td>
+                <td class="metric-value" th:text="${#numbers.formatDecimal(targetReport.throttledRequests, 0, 'COMMA', 0, 'POINT')}"></td>
+            </tr>
+            <tr>
+                <td>Requests Dropped (Backpressure)</td>
+                <td class="metric-value" th:text="${#numbers.formatDecimal(targetReport.backpressureDroppedRequests, 0, 'COMMA', 0, 'POINT')}"></td>
+            </tr>
+            <tr>
+                <td>Successful Requests (2xx)</td>
+                <td class="metric-value" th:text="${#numbers.formatDecimal(targetReport.successfulRequests, 0, 'COMMA', 0, 'POINT')}"></td>
+            </tr>
+            <tr>
+                <td>Failed Requests (non-2xx/errors)</td>
+                <td class="metric-value" th:text="${#numbers.formatDecimal(targetReport.failedRequests, 0, 'COMMA', 0, 'POINT')}"></td>
+            </tr>
+            <tr>
+                <td>Latency - Average (ms)</td>
+                <td class="metric-value" th:text="${targetReport.latencyData != null ? #numbers.formatDecimal(targetReport.latencyData.avg, 2, 'COMMA', 2, 'POINT') : 'N/A'}"></td>
+            </tr>
+            <tr>
+                <td>Latency - Max (ms)</td>
+                <td class="metric-value" th:text="${targetReport.latencyData != null ? #numbers.formatDecimal(targetReport.latencyData.max, 2, 'COMMA', 2, 'POINT') : 'N/A'}"></td>
+            </tr>
+            <tr>
+                <td>Latency - Request Count</td>
+                <td class="metric-value" th:text="${targetReport.latencyData != null ? #numbers.formatDecimal(targetReport.latencyData.count, 0, 'COMMA', 0, 'POINT') : 'N/A'}"></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        LoadTester Application
+    </div>
+</div>
+</body>
+</html>
+    
