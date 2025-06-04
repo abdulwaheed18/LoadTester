@@ -2,6 +2,7 @@ package com.example.loadtester.service;
 
 import com.example.loadtester.config.LoadTesterProperties;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Timer;
@@ -21,8 +22,12 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Service
 public class SummaryReportingService {
@@ -39,22 +44,25 @@ public class SummaryReportingService {
         this.properties = properties;
         this.loadEmitterService = loadEmitterService;
 
-        // Initialize Thymeleaf Template Engine
         ClassLoaderTemplateResolver templateResolver = new ClassLoaderTemplateResolver();
         templateResolver.setSuffix(".html");
         templateResolver.setTemplateMode(TemplateMode.HTML);
         templateResolver.setCharacterEncoding("UTF-8");
-        templateResolver.setPrefix("templates/"); // Path to templates in src/main/resources
+        templateResolver.setPrefix("templates/");
         this.templateEngine = new TemplateEngine();
         this.templateEngine.setTemplateResolver(templateResolver);
     }
 
-    // Data structure for report
     public static class TargetReportData {
         public String name, url, method;
         public int desiredTps;
         public double initiatedRequests, throttledRequests, backpressureDroppedRequests, successfulRequests, failedRequests;
         public LatencyData latencyData;
+        public Map<String, Double> statusCodeCounts; // Changed to String key for status, Double for count
+
+        public TargetReportData() {
+            statusCodeCounts = new TreeMap<>(); // TreeMap to keep status codes sorted
+        }
     }
 
     public static class LatencyData {
@@ -64,7 +72,6 @@ public class SummaryReportingService {
             this.avg = avg; this.max = max; this.count = count;
         }
     }
-
 
     public void generateAndLogSummaryReport() {
         if (properties.getTargets() == null || properties.getTargets().isEmpty()) {
@@ -100,6 +107,14 @@ public class SummaryReportingService {
             data.failedRequests = meterRegistry.find("loadtester.requests.completed").tags(failureOutcomeTags).counters()
                     .stream().mapToDouble(Counter::count).sum();
 
+            // Collect status code counts
+            meterRegistry.find("loadtester.requests.by_status").tag("target", data.name).counters().forEach(counter -> {
+                String httpStatus = counter.getId().getTag("http_status");
+                if (httpStatus != null) {
+                    data.statusCodeCounts.put(httpStatus, counter.count());
+                }
+            });
+
             Timer latencyTimer = meterRegistry.find("loadtester.request.latency").tag("target", data.name).timer();
             if (latencyTimer != null && latencyTimer.count() > 0) {
                 data.latencyData = new LatencyData(
@@ -110,7 +125,6 @@ public class SummaryReportingService {
             }
             targetReportsData.add(data);
 
-            // Append to console report
             consoleReport.append(String.format("\nTarget: %s (URL: %s, Method: %s)\n",
                     data.name, data.url, data.method));
             consoleReport.append(String.format("  Desired TPS: %s\n",
@@ -126,12 +140,17 @@ public class SummaryReportingService {
             } else {
                 consoleReport.append("  Latency (ms): No latency data recorded.\n");
             }
+            if (!data.statusCodeCounts.isEmpty()) {
+                consoleReport.append("  Status Code Counts:\n");
+                data.statusCodeCounts.forEach((status, count) ->
+                        consoleReport.append(String.format("    %s: %.0f\n", status, count))
+                );
+            }
             consoleReport.append("--------------------------------------------------\n");
         }
         consoleReport.append("--- End of Console Report ---\n");
         logger.info(consoleReport.toString());
 
-        // Generate HTML Report if enabled
         if (properties.getReporting().getHtml().isEnabled()) {
             generateHtmlReport(targetReportsData, timestamp);
         }
@@ -147,7 +166,7 @@ public class SummaryReportingService {
 
         String reportFilePath = properties.getReporting().getHtml().getFilePath();
         try (FileWriter writer = new FileWriter(reportFilePath)) {
-            templateEngine.process("summary-report", context, writer); // Template name without .html
+            templateEngine.process("summary-report", context, writer);
             logger.info("HTML summary report generated successfully at: {}", Paths.get(reportFilePath).toAbsolutePath());
         } catch (IOException e) {
             logger.error("Failed to write HTML summary report to file: {}", reportFilePath, e);
@@ -155,7 +174,6 @@ public class SummaryReportingService {
             logger.error("Error generating HTML report", e);
         }
     }
-
 
     private double getCounterValue(String name, String... tags) {
         Counter counter = meterRegistry.find(name).tags(tags).counter();
@@ -173,4 +191,3 @@ public class SummaryReportingService {
         }
     }
 }
-    

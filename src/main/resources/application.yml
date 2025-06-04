@@ -12,7 +12,7 @@ loadtester:
         Content-Type: "application/json"
       payloadPath: classpath:payloads/foo.json
       desiredTps: 1 # Adjusted for practical testing; was 300
-      throttleIntervalMs: 2000 # e.g., 1 request every 2000ms max if desiredTps is high
+      throttleIntervalMs: 10 # e.g., 1 request every 2000ms max if desiredTps is high
     - name: API2
       url: https://dummyjson.com/auth/login
       method: POST
