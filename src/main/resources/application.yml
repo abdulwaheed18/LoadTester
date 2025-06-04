@@ -8,4 +8,4 @@ loadtester:
         Content-Type: "application/json"
       payloadPath: classpath:payloads/foo.json
       desiredTps: 300
-      throttleIntervalMs: 0
+      throttleIntervalMs: 10
