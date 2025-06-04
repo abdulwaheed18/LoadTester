@@ -71,7 +71,7 @@ public class LoadEmitterService {
                         .doOnSuccess(status ->
                                 logger.debug("[{}] request #{} succeeded with status {}", name, tick, status))
                         .doOnError(err ->
-                                logger.warn("[{}] request #{} failed: {}", name, tick, err.getMessage()))
+                                logger.warn("[{}] request #{} failed", name, tick, err))
                         .subscribe();
             });
 
@@ -105,6 +105,18 @@ public class LoadEmitterService {
         }
 
         return requestSpec
-                .exchangeToMono(response -> Mono.just(response.rawStatusCode()));
+                .exchangeToMono(response ->
+                        response.bodyToMono(String.class)
+                                .defaultIfEmpty("")
+                                .flatMap(body -> {
+                                    int status = response.rawStatusCode();
+                                    if (response.statusCode().is2xxSuccessful()) {
+                                        return Mono.just(status);
+                                    } else {
+                                        logger.warn("Backend returned {} with body: {}", status, body);
+                                        return Mono.error(new RuntimeException("HTTP " + status + ": " + body));
+                                    }
+                                })
+                );
     }
 }
