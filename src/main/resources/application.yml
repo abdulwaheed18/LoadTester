@@ -1,7 +1,7 @@
 loadtester:
   targets:
     - name: serviceA
-      url: https://api.example.com/v1/foo
+      url: https://dummyjson.com/auth/RESOURCE
       method: POST
       headers:
         Authorization: "Bearer SOME_TOKEN"
@@ -9,11 +9,3 @@ loadtester:
       payloadPath: classpath:payloads/foo.json
       desiredTps: 300
       throttleIntervalMs: 0
-
-    - name: serviceB
-      url: https://api.example.com/v1/bar
-      method: GET
-      headers:
-        Authorization: "Bearer OTHER_TOKEN"
-      desiredTps: 50
-      throttleIntervalMs: 10
