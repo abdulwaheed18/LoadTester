@@ -26,6 +26,7 @@ public class LoadEmitterService {
     private final PayloadLoader payloadLoader;
     private final WebClient webClient;
     private final Map<String, Disposable> activeEmitters = new HashMap<>();
+    private final Map<String, String> payloadCache = new HashMap<>();
 
     public LoadEmitterService(
             LoadTesterProperties props,
@@ -56,6 +57,13 @@ public class LoadEmitterService {
             int tps = endpoint.getDesiredTps();
             int throttleMs = endpoint.getThrottleIntervalMs();
             rateLimiterService.initializeBucket(name, throttleMs);
+
+            HttpMethod method = HttpMethod.resolve(endpoint.getMethod());
+            if (endpoint.getPayloadPath() != null &&
+                    (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.PATCH)) {
+                String body = payloadLoader.loadPayload(endpoint.getPayloadPath());
+                payloadCache.put(name, body);
+            }
 
             long intervalMs = (tps <= 0) ? 1000L : (1000L / tps);
 
@@ -98,7 +106,11 @@ public class LoadEmitterService {
         }
 
         if (ep.getPayloadPath() != null && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.PATCH)) {
-            String body = payloadLoader.loadPayload(ep.getPayloadPath());
+            String body = payloadCache.get(ep.getName());
+            if (body == null) {
+                body = payloadLoader.loadPayload(ep.getPayloadPath());
+                payloadCache.put(ep.getName(), body);
+            }
             requestSpec = (WebClient.RequestBodySpec) requestSpec
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body);
