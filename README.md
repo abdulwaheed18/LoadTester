@@ -1,2 +1,71 @@
 # LoadTester
-LoadTester is a Spring Boot app that sends configurable REST requests at a specified TPS and enforces per‐endpoint throttling (e.g., max one request every X ms). Targets (URL, method, headers, payload, TPS, throttle interval) are defined in application.yml. It uses WebFlux’s WebClient for nonblocking calls and Bucket4j for precise rate limiting.
+
+A Spring Boot–based load‐testing utility that can:
+
+- **Emit high‐volume REST requests** (up to hundreds of TPS per target).
+- **Enforce per‐endpoint throttling** (e.g. limit to at most 1 request every X ms).
+- Fully **configure URLs, HTTP method, headers, payloads, desired TPS, and throttle intervals** in `application.yml`.
+- Use non‐blocking requests via Spring WebFlux’s `WebClient`.
+- Leverage [Bucket4j](https://github.com/bucket4j/bucket4j) for precise token‐bucket rate limits.
+- Provide logs of request success/failure and skip events when throttled.
+
+---
+
+## Table of Contents
+
+1. [Features](#features)  
+2. [Project Structure](#project-structure)  
+3. [Prerequisites](#prerequisites)  
+4. [Configuration](#configuration)  
+5. [Building the Project](#building-the-project)  
+6. [Running LoadTester](#running-loadtester)  
+7. [How It Works](#how-it-works)  
+8. [Customizing / Extending](#customizing--extending)  
+9. [Logging & Metrics](#logging--metrics)  
+10. [License](#license)
+
+---
+
+## Features
+
+- **High‐TPS Generation**  
+  Spin up concurrent request “emitters” that target one or more REST endpoints at a configurable rate (e.g. 300 TPS).
+
+- **Per‐Endpoint Throttling**  
+  For each endpoint, specify a “throttle interval” in milliseconds so that if you must never send more than one request every _N_ ms, Bucket4j enforces that automatically.
+
+- **Non‐Blocking HTTP Client**  
+  Uses Reactor’s `Flux.interval(...)` to schedule ticks and Spring WebFlux’s `WebClient` to send requests without blocking threads.
+
+- **Externalized Configuration**  
+  All endpoint details (URL, method, headers, payload path, desired TPS, throttle interval) live in `application.yml`. No hard‐coding.
+
+- **Easy to Extend**  
+  Simple service classes (`RateLimiterService`, `LoadEmitterService`, `PayloadLoader`) can be modified to add new behavior—e.g. dynamic reloading, circuit breakers, custom metrics.
+
+---
+
+## Project Structure
+
+``` text
+loadtester/
+├─ pom.xml
+├─ README.md
+├─ src
+│  ├─ main
+│  │  ├─ java
+│  │  │  └─ com/example/loadtester
+│  │  │     ├─ config
+│  │  │     │  └─ LoadTesterProperties.java
+│  │  │     ├─ service
+│  │  │     │  ├─ LoadEmitterService.java
+│  │  │     │  ├─ RateLimiterService.java
+│  │  │     │  └─ PayloadLoader.java
+│  │  │     └─ LoadTesterApplication.java
+│  │  └─ resources
+│  │     ├─ application.yml
+│  │     └─ payloads
+│  │        └─ foo.json
+│  └─ test
+│     └─ java (optional—add unit tests here)
+└─ loadtester.zip (if you distribute a ZIP)
