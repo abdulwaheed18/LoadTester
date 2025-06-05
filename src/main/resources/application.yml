@@ -5,15 +5,15 @@ spring:
 loadtester:
   runDurationMinutes: 1 # Application will run for 5 minutes then shutdown. 0 or negative means run indefinitely.
   targets:
-    - name: API1
+    - name: API-1
       url: https://dummyjson.com/auth/login
       method: POST
       headers:
         Content-Type: "application/json"
       payloadPath: classpath:payloads/foo.json
       desiredTps: 1 # Adjusted for practical testing; was 300
-      throttleIntervalMs: 10 # e.g., 1 request every 2000ms max if desiredTps is high
-    - name: API2
+      throttleIntervalMs: 100 # e.g., 1 request every 2000ms max if desiredTps is high
+    - name: API-2
       url: https://dummyjson.com/auth/login
       method: POST
       headers:
