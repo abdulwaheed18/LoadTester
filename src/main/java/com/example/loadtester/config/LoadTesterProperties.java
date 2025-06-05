@@ -1,3 +1,4 @@
+// src/main/java/com/example/loadtester/config/LoadTesterProperties.java
 package com.example.loadtester.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -19,6 +20,7 @@ public class LoadTesterProperties {
 
     private List<TargetEndpoint> targets;
     private Reporting reporting = new Reporting();
+    private Http http = new Http(); // New HTTP configuration section
 
     public int getRunDurationMinutes() {
         return runDurationMinutes;
@@ -44,6 +46,14 @@ public class LoadTesterProperties {
         this.reporting = reporting;
     }
 
+    public Http getHttp() {
+        return http;
+    }
+
+    public void setHttp(Http http) {
+        this.http = http;
+    }
+
     public static class TargetEndpoint {
         @NotBlank(message = "Target name must not be blank")
         private String name;
@@ -57,6 +67,7 @@ public class LoadTesterProperties {
         private int desiredTps;
         @Min(value = 0, message = "Throttle interval must be non-negative. Use 0 for no specific throttle.")
         private int throttleIntervalMs;
+        // private boolean ignoreSslErrors = false; // Per-target SSL ignore - more complex, for future consideration
 
         // Getters and Setters
         public String getName() { return name; }
@@ -73,6 +84,9 @@ public class LoadTesterProperties {
         public void setDesiredTps(int desiredTps) { this.desiredTps = desiredTps; }
         public int getThrottleIntervalMs() { return throttleIntervalMs; }
         public void setThrottleIntervalMs(int throttleIntervalMs) { this.throttleIntervalMs = throttleIntervalMs; }
+        // public boolean isIgnoreSslErrors() { return ignoreSslErrors; }
+        // public void setIgnoreSslErrors(boolean ignoreSslErrors) { this.ignoreSslErrors = ignoreSslErrors; }
+
 
         @Override
         public String toString() {
@@ -90,7 +104,9 @@ public class LoadTesterProperties {
         private Periodic periodic = new Periodic();
         private Shutdown shutdown = new Shutdown();
         private Html html = new Html();
-        private History history = new History(); // Added History config
+        private History history = new History();
+        private Configurations configurations = new Configurations(); // Keep user configs distinct from HTTP client config
+
 
         public Periodic getPeriodic() { return periodic; }
         public void setPeriodic(Periodic periodic) { this.periodic = periodic; }
@@ -98,8 +114,10 @@ public class LoadTesterProperties {
         public void setShutdown(Shutdown shutdown) { this.shutdown = shutdown; }
         public Html getHtml() { return html; }
         public void setHtml(Html html) { this.html = html; }
-        public History getHistory() { return history; } // Getter for History config
-        public void setHistory(History history) { this.history = history; } // Setter for History config
+        public History getHistory() { return history; }
+        public void setHistory(History history) { this.history = history; }
+        public Configurations getConfigurations() { return configurations; }
+        public void setConfigurations(Configurations configurations) { this.configurations = configurations;}
 
 
         public static class Periodic {
@@ -121,18 +139,19 @@ public class LoadTesterProperties {
 
         public static class Html {
             private boolean enabled = true;
-            private String filePath = "./reports/html/loadtest-summary-report.html"; // Default, path adjusted for history
+            // Removed filePath as it's now managed by TestHistoryService per run
+            // private String filePath = "./reports/html/loadtest-summary-report.html";
 
             public boolean isEnabled() { return enabled; }
             public void setEnabled(boolean enabled) { this.enabled = enabled; }
-            public String getFilePath() { return filePath; }
-            public void setFilePath(String filePath) { this.filePath = filePath; }
+            // public String getFilePath() { return filePath; }
+            // public void setFilePath(String filePath) { this.filePath = filePath; }
         }
 
-        public static class History { // New inner class for History settings
-            private String directory = "./reports/history"; // Default directory for storing all historical run data
-            private boolean saveJson = true; // Enable saving JSON reports by default
-            private boolean saveCsv = true;  // Enable saving CSV reports by default
+        public static class History {
+            private String directory = "./reports/history";
+            private boolean saveJson = true;
+            private boolean saveCsv = true;
 
             public String getDirectory() { return directory; }
             public void setDirectory(String directory) { this.directory = directory; }
@@ -140,6 +159,36 @@ public class LoadTesterProperties {
             public void setSaveJson(boolean saveJson) { this.saveJson = saveJson; }
             public boolean isSaveCsv() { return saveCsv; }
             public void setSaveCsv(boolean saveCsv) { this.saveCsv = saveCsv; }
+        }
+
+        // Represents the configuration for where user-defined test scenarios are stored
+        public static class Configurations {
+            private String directory = "./test_configs";
+
+            public String getDirectory() { return directory; }
+            public void setDirectory(String directory) { this.directory = directory; }
+        }
+    }
+
+    // New inner class for HTTP client specific settings
+    public static class Http {
+        private Ssl ssl = new Ssl();
+
+        public Ssl getSsl() { return ssl; }
+        public void setSsl(Ssl ssl) { this.ssl = ssl; }
+
+        public static class Ssl {
+            // Global flag to skip SSL certificate verification for all targets
+            // WARNING: Only use this in trusted development/testing environments.
+            private boolean insecureSkipVerify = false;
+
+            public boolean isInsecureSkipVerify() {
+                return insecureSkipVerify;
+            }
+
+            public void setInsecureSkipVerify(boolean insecureSkipVerify) {
+                this.insecureSkipVerify = insecureSkipVerify;
+            }
         }
     }
 }

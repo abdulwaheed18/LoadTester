@@ -34,9 +34,15 @@ loadtester:
       directory: "./reports/history"
       saveJson: true
       saveCsv: true
+    configurations: # Where user-defined test JSON files are stored
+      directory: "./test_configs"
 
-  configurations:
-    directory: "./test_configs"
+  http: # New section for HTTP client specific settings
+    ssl:
+      # Global flag to skip SSL certificate verification for all targets.
+      # WARNING: Only use this in trusted development/testing environments.
+      # DO NOT USE THIS IN PRODUCTION for external services.
+      insecure-skip-verify: false # Set to true to skip SSL checks
 
 
 management:
