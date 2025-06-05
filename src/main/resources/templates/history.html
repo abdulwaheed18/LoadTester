@@ -16,41 +16,52 @@
         .back-link { margin-bottom: 1.5rem; display: inline-block; color: #2563eb; text-decoration: none; }
         .back-link:hover { text-decoration: underline; }
         .run-id-mono { font-family: 'monospace'; font-size: 0.8em; }
-        .comparison-area table { margin-top: 1rem; width: 100%;}
-        .comparison-area th, .comparison-area td { border: 1px solid #ddd; padding: 8px; font-size: 0.85em;}
-        .comparison-area th { background-color: #e9ecef; }
-        .baseline { background-color: #e6ffed !important; } /* Light green for baseline column */
-        .delta-positive { color: #16a34a; } /* Green for positive changes */
-        .delta-negative { color: #dc2626; } /* Red for negative changes */
+        .comparison-area table { margin-top: 1rem; width: 100%; border-collapse: collapse; }
+        .comparison-area th, .comparison-area td { border: 1px solid #ddd; padding: 8px; font-size: 0.85em; vertical-align: top;}
+        .comparison-area th { background-color: #e9ecef; text-align: center; }
+        .comparison-area td { text-align: right; }
+        .comparison-area td.metric-label, .comparison-area td.api-name-label { text-align: left; font-weight: 500;}
+        .baseline { background-color: #e6ffed !important; }
+        .delta-positive { color: #16a34a; }
+        .delta-negative { color: #dc2626; }
+        .sticky-col { position: sticky; z-index: 10; background-color: inherit; }
+        .left-0 { left: 0; }
+        .left-metric { left: 120px; /* Adjust based on API Target column width */}
+        .form-input, .form-select {
+            width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db;
+            border-radius: 0.375rem; box-sizing: border-box; font-size: 0.875rem;
+        }
+         .form-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; }
+
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 p-4 md:p-8">
-<div class="max-w-7xl mx-auto">
+<div class="max-w-full mx-auto px-2">
     <a href="/" class="back-link">&larr; Back to Dashboard</a>
     <header class="mb-6">
         <h1 class="text-3xl font-bold text-gray-900">Test Run History</h1>
         <p class="text-gray-600">Review past load test executions and their results.</p>
     </header>
 
-    <div class="mb-4 flex items-center space-x-4">
+    <div class="mb-4 flex flex-wrap items-center space-x-2 md:space-x-4">
         <button id="compareSelectedButton" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50" disabled>
             Compare Selected Runs (<span id="selectedRunsCount">0</span>)
         </button>
-        <div id="baselineSelectionContainer" class="hidden">
-            <label for="baselineRunSelect" class="text-sm font-medium text-gray-700">Select Baseline for Comparison:</label>
-            <select id="baselineRunSelect" class="ml-2 form-input py-1 px-2 text-sm border-gray-300 rounded-md"></select>
+        <div id="baselineSelectionContainer" class="hidden flex items-center space-x-2">
+            <label for="baselineRunSelect" class="text-sm font-medium text-gray-700">Baseline:</label>
+            <select id="baselineRunSelect" class="form-select py-1.5 px-2 text-sm border-gray-300 rounded-md w-auto"></select>
         </div>
     </div>
 
-    <div class="table-container">
+    <div class="table-container overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
             <thead>
             <tr>
-                <th><input type="checkbox" id="selectAllRunsForCompare" title="Select/Deselect All"></th>
+                <th class="px-2 py-3"><input type="checkbox" id="selectAllRunsForCompare" title="Select/Deselect All"></th>
                 <th>Run ID</th>
                 <th>Timestamp</th>
-                <th>Total Requests</th> <!-- Consider deriving this from the full details if not in summary -->
-                <th>Success Rate (%)</th> <!-- Consider deriving this from the full details if not in summary -->
+                <th>Total Requests</th>
+                <th>Success Rate (%)</th>
                 <th>Actions</th>
             </tr>
             </thead>
@@ -62,16 +73,12 @@
         </table>
     </div>
 
-    <!-- Area for Comparison Results -->
-    <div id="comparisonResultArea" class="mt-8 p-6 bg-white rounded-lg shadow-md comparison-area hidden">
+    <div id="comparisonResultArea" class="mt-8 p-2 md:p-6 bg-white rounded-lg shadow-md comparison-area hidden overflow-x-auto">
         <h2 class="text-2xl font-semibold mb-4 text-gray-800">Run Comparison</h2>
         <div id="comparisonTableContainer">
-            <!-- Comparison table will be rendered here -->
         </div>
     </div>
 
-
-    <!-- Modal for displaying run details (optional, can be a separate page) -->
     <div id="detailsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
         <div class="relative top-10 md:top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-2/3 shadow-lg rounded-md bg-white">
             <div class="flex justify-between items-center mb-3">
@@ -91,318 +98,324 @@
 
 </div>
 
-<script>
-    const historyTableBody = document.getElementById('historyTableBody');
-    const detailsModal = document.getElementById('detailsModal');
-    const modalRunId = document.getElementById('modalRunId');
-    const modalContent = document.getElementById('modalContent');
-    const closeModalButton = document.getElementById('closeModalButton');
-    const closeModalButtonBottom = document.getElementById('closeModalButtonBottom');
+<script th:inline="none">
+    //<![CDATA[
+        const historyTableBody = document.getElementById('historyTableBody');
+        const detailsModal = document.getElementById('detailsModal');
+        const modalRunId = document.getElementById('modalRunId');
+        const modalContent = document.getElementById('modalContent');
+        const closeModalButton = document.getElementById('closeModalButton');
+        const closeModalButtonBottom = document.getElementById('closeModalButtonBottom');
 
-    // Comparison Feature Elements
-    const selectAllRunsForCompare = document.getElementById('selectAllRunsForCompare');
-    const compareSelectedButton = document.getElementById('compareSelectedButton');
-    const selectedRunsCountSpan = document.getElementById('selectedRunsCount');
-    const comparisonResultArea = document.getElementById('comparisonResultArea');
-    const comparisonTableContainer = document.getElementById('comparisonTableContainer');
-    const baselineSelectionContainer = document.getElementById('baselineSelectionContainer');
-    const baselineRunSelect = document.getElementById('baselineRunSelect');
+        const selectAllRunsForCompare = document.getElementById('selectAllRunsForCompare');
+        const compareSelectedButton = document.getElementById('compareSelectedButton');
+        const selectedRunsCountSpan = document.getElementById('selectedRunsCount');
+        const comparisonResultArea = document.getElementById('comparisonResultArea');
+        const comparisonTableContainer = document.getElementById('comparisonTableContainer');
+        const baselineSelectionContainer = document.getElementById('baselineSelectionContainer');
+        const baselineRunSelect = document.getElementById('baselineRunSelect');
 
-    let selectedRunIdsForCompare = new Set();
+        let selectedRunIdsForCompare = new Set();
 
-    async function fetchHistory() {
-        try {
-            const response = await fetch('/api/loadtest/history');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+        async function fetchHistory() {
+            try {
+                const response = await fetch('/api/loadtest/history');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const historyList = await response.json();
+                renderHistory(historyList);
+            } catch (error) {
+                console.error('Error fetching history:', error);
+                historyTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading history: ${error.message}</td></tr>`;
             }
-            const historyList = await response.json();
-            renderHistory(historyList);
-        } catch (error) {
-            console.error('Error fetching history:', error);
-            historyTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading history: ${error.message}</td></tr>`;
-        }
-    }
-
-    function renderHistory(historyList) {
-        historyTableBody.innerHTML = '';
-        if (!historyList || historyList.length === 0) {
-            historyTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-4">No test history found.</td></tr>`;
-            return;
         }
 
-        historyList.forEach(run => {
-            const row = historyTableBody.insertRow();
-            const totalRequests = run.totalRequests !== undefined ? formatNumber(run.totalRequests) : 'N/A';
-            const successRate = run.successRate !== undefined ? run.successRate.toFixed(2) + '%' : 'N/A';
+        function renderHistory(historyList) {
+            historyTableBody.innerHTML = '';
+            if (!historyList || historyList.length === 0) {
+                historyTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-4">No test history found.</td></tr>`;
+                return;
+            }
 
-            row.innerHTML = `
-                <td><input type="checkbox" class="run-compare-checkbox" data-runid="${run.runId}" data-runname="${run.runId} (${run.reportTimestamp || 'N/A'})"></td>
-                <td><span class="run-id-mono">${run.runId}</span></td>
-                <td>${run.reportTimestamp || 'N/A'}</td>
-                <td>${totalRequests}</td>
-                <td>${successRate}</td>
-                <td>
-                    <a href="#" class="action-link view-details-link" data-runid="${run.runId}">Details</a>
-                    ${run.htmlReportPath ? `<a href="/api/loadtest/export/${run.runId}/html" target="_blank" class="action-link">HTML</a>` : ''}
-                    ${run.jsonReportPath ? `<a href="/api/loadtest/export/${run.runId}/json" target="_blank" class="action-link">JSON</a>` : ''}
-                    ${run.csvReportPath ? `<a href="/api/loadtest/export/${run.runId}/csv" target="_blank" class="action-link">CSV</a>` : ''}
-                </td>
-            `;
-        });
+            historyList.forEach(run => {
+                const row = historyTableBody.insertRow();
+                const totalRequests = run.totalRequests !== undefined ? formatNumber(run.totalRequests) : 'N/A';
+                const successRate = run.successRate !== undefined ? run.successRate.toFixed(2) + '%' : 'N/A';
+                const runDisplayName = `${run.runId.substring(0,8)}... (${run.reportTimestamp ? new Date(run.reportTimestamp).toLocaleDateString() : 'N/A'})`;
 
-        document.querySelectorAll('.view-details-link').forEach(link => {
-            link.addEventListener('click', (event) => {
-                event.preventDefault();
-                const runId = event.target.dataset.runid;
-                fetchAndShowDetails(runId);
+                row.innerHTML = `
+                    <td class="px-2 py-3"><input type="checkbox" class="run-compare-checkbox form-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" data-runid="${run.runId}" data-runname="${runDisplayName}"></td>
+                    <td><span class="run-id-mono">${run.runId}</span></td>
+                    <td>${run.reportTimestamp || 'N/A'}</td>
+                    <td>${totalRequests}</td>
+                    <td>${successRate}</td>
+                    <td>
+                        <a href="#" class="action-link view-details-link" data-runid="${run.runId}">Details</a>
+                        ${run.htmlReportPath ? `<a href="/api/loadtest/export/${run.runId}/html" target="_blank" class="action-link">HTML</a>` : ''}
+                        ${run.jsonReportPath ? `<a href="/api/loadtest/export/${run.runId}/json" target="_blank" class="action-link">JSON</a>` : ''}
+                        ${run.csvReportPath ? `<a href="/api/loadtest/export/${run.runId}/csv" target="_blank" class="action-link">CSV</a>` : ''}
+                    </td>
+                `;
             });
-        });
 
-        // Add event listeners for checkboxes after rows are rendered
-        document.querySelectorAll('.run-compare-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', handleCompareCheckboxChange);
-        });
-    }
+            document.querySelectorAll('.view-details-link').forEach(link => {
+                link.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const runId = event.target.dataset.runid;
+                    fetchAndShowDetails(runId);
+                });
+            });
 
-    function handleCompareCheckboxChange(event) {
-        const runId = event.target.dataset.runid;
-        const runName = event.target.dataset.runname; // For baseline dropdown
-        if (event.target.checked) {
-            selectedRunIdsForCompare.add({id: runId, name: runName});
-        } else {
-            selectedRunIdsForCompare.forEach(item => {
-                if (item.id === runId) selectedRunIdsForCompare.delete(item);
+            document.querySelectorAll('.run-compare-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', handleCompareCheckboxChange);
             });
         }
-        updateCompareButtonState();
-    }
 
-    selectAllRunsForCompare.addEventListener('change', (event) => {
-        const checkboxes = document.querySelectorAll('.run-compare-checkbox');
-        checkboxes.forEach(checkbox => {
-            checkbox.checked = event.target.checked;
-            const runId = checkbox.dataset.runid;
-            const runName = checkbox.dataset.runname;
+        function handleCompareCheckboxChange(event) {
+            const runId = event.target.dataset.runid;
+            const runName = event.target.dataset.runname;
             if (event.target.checked) {
                 selectedRunIdsForCompare.add({id: runId, name: runName});
             } else {
-                 selectedRunIdsForCompare.forEach(item => {
+                selectedRunIdsForCompare.forEach(item => {
                     if (item.id === runId) selectedRunIdsForCompare.delete(item);
                 });
             }
-        });
-        updateCompareButtonState();
-    });
+            updateCompareButtonState();
+        }
 
-    function updateCompareButtonState() {
-        const count = selectedRunIdsForCompare.size;
-        selectedRunsCountSpan.textContent = count;
-        compareSelectedButton.disabled = count < 2;
-
-        if (count >= 2) {
-            baselineSelectionContainer.classList.remove('hidden');
-            baselineRunSelect.innerHTML = '<option value="">None (Show Raw Values)</option>';
-            selectedRunIdsForCompare.forEach(run => {
-                const option = document.createElement('option');
-                option.value = run.id;
-                option.textContent = run.name;
-                baselineRunSelect.appendChild(option);
+        selectAllRunsForCompare.addEventListener('change', (event) => {
+            const checkboxes = document.querySelectorAll('.run-compare-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = event.target.checked;
+                const runId = checkbox.dataset.runid;
+                const runName = checkbox.dataset.runname;
+                if (event.target.checked) {
+                    selectedRunIdsForCompare.add({id: runId, name: runName});
+                } else {
+                     selectedRunIdsForCompare.forEach(item => {
+                        if (item.id === runId) selectedRunIdsForCompare.delete(item);
+                    });
+                }
             });
-        } else {
-            baselineSelectionContainer.classList.add('hidden');
-            comparisonResultArea.classList.add('hidden'); // Hide comparison if not enough selected
-        }
-    }
-
-    compareSelectedButton.addEventListener('click', async () => {
-        if (selectedRunIdsForCompare.size < 2) {
-            alert("Please select at least two runs to compare.");
-            return;
-        }
-        const runIdsArray = Array.from(selectedRunIdsForCompare).map(item => item.id);
-        const selectedBaselineRunId = baselineRunSelect.value;
-
-        comparisonTableContainer.innerHTML = '<p class="text-center py-4">Loading comparison data...</p>';
-        comparisonResultArea.classList.remove('hidden');
-
-        try {
-            let apiUrl = `/api/loadtest/compare?runIds=${runIdsArray.join(',')}`;
-            if (selectedBaselineRunId) {
-                apiUrl += `&baselineRunId=${selectedBaselineRunId}`;
-            }
-            const response = await fetch(apiUrl);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const comparisonData = await response.json();
-            renderComparisonTable(comparisonData);
-        } catch (error) {
-            console.error('Error fetching comparison data:', error);
-            comparisonTableContainer.innerHTML = `<p class="text-red-600 text-center py-4">Error loading comparison: ${error.message}</p>`;
-        }
-    });
-
-    function renderComparisonTable(data) {
-        if (!data || !data.comparedRuns || data.comparedRuns.length === 0) {
-            comparisonTableContainer.innerHTML = '<p class="text-center py-4">No data to compare.</p>';
-            return;
-        }
-
-        const baselineRunId = data.baselineRunId;
-        const runs = data.comparedRuns;
-        const metricsToDisplay = [ // Define which metrics to show and how to access them
-            { key: 'initiatedRequests', label: 'Initiated Requests', format: formatNumber },
-            { key: 'successfulRequests', label: 'Successful (2xx)', format: formatNumber },
-            { key: 'failedRequests', label: 'Failed (non-2xx)', format: formatNumber },
-            { key: 'latencyData.avg', label: 'Avg Latency (ms)', format: (v) => formatNumber(v, 2) },
-            { key: 'latencyData.max', label: 'Max Latency (ms)', format: (v) => formatNumber(v, 2) },
-            // Add more metrics as needed, e.g., success rate, specific status codes
-        ];
-
-        // Find all unique API target names across all selected runs
-        const allApiNames = new Set();
-        runs.forEach(run => {
-            (run.metrics || []).forEach(metric => allApiNames.add(metric.name));
+            updateCompareButtonState();
         });
 
-        if (allApiNames.size === 0) {
-            comparisonTableContainer.innerHTML = '<p class="text-center py-4">No API target metrics found in selected runs.</p>';
-            return;
-        }
+        function updateCompareButtonState() {
+            const count = selectedRunIdsForCompare.size;
+            selectedRunsCountSpan.textContent = count;
+            compareSelectedButton.disabled = count < 2;
 
-        let tableHtml = '<table class="min-w-full divide-y divide-gray-200">';
-        // Header Row
-        tableHtml += '<thead class="bg-gray-50"><tr><th class="sticky left-0 bg-gray-50 z-10">API Target</th><th class="sticky left-24 bg-gray-50 z-10">Metric</th>';
-        runs.forEach(run => {
-            tableHtml += `<th class="${run.id === baselineRunId ? 'baseline' : ''}">${run.runId.substring(0,12)}...<br/>(${new Date(run.metrics[0]?.reportTimestamp || Date.now()).toLocaleDateString()})</th>`;
-        });
-        tableHtml += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-
-        allApiNames.forEach(apiName => {
-            metricsToDisplay.forEach((metricInfo, metricIdx) => {
-                tableHtml += `<tr>`;
-                if (metricIdx === 0) { // Show API name only for the first metric of that API
-                    tableHtml += `<td rowspan="${metricsToDisplay.length}" class="font-semibold sticky left-0 bg-white z-10 align-top pt-3">${apiName}</td>`;
-                }
-                tableHtml += `<td class="sticky left-24 bg-white z-10">${metricInfo.label}</td>`;
-
-                let baselineValue = null;
-                if (baselineRunId) {
-                    const baselineRunData = runs.find(r => r.id === baselineRunId);
-                    const baselineApiMetric = baselineRunData?.metrics?.find(m => m.name === apiName);
-                    baselineValue = getNestedValue(baselineApiMetric, metricInfo.key);
-                }
-
-                runs.forEach(run => {
-                    const apiMetric = run.metrics?.find(m => m.name === apiName);
-                    let value = getNestedValue(apiMetric, metricInfo.key);
-                    let displayValue = (value !== null && value !== undefined) ? metricInfo.format(value) : 'N/A';
-
-                    let deltaHtml = "";
-                    if (baselineRunId && run.id !== baselineRunId && baselineValue !== null && value !== null && value !== undefined) {
-                        const delta = value - baselineValue;
-                        const percentageDelta = baselineValue !== 0 ? (delta / baselineValue) * 100 : (delta > 0 ? Infinity : (delta < 0 ? -Infinity : 0));
-
-                        let deltaClass = "";
-                        // For latency, lower is better. For requests/success, higher is better.
-                        // This is a simple rule, might need per-metric logic.
-                        if (metricInfo.key.includes('latency') || metricInfo.key.includes('failed')) { // Lower is better
-                            if (delta < 0) deltaClass = 'delta-positive'; // Good (less latency/failures)
-                            else if (delta > 0) deltaClass = 'delta-negative'; // Bad
-                        } else { // Higher is better
-                            if (delta > 0) deltaClass = 'delta-positive'; // Good
-                            else if (delta < 0) deltaClass = 'delta-negative'; // Bad
-                        }
-                        deltaHtml = ` <span class="text-xs ${deltaClass}">(${delta >= 0 ? '+' : ''}${metricInfo.format(delta)} / ${percentageDelta !== Infinity && percentageDelta !== -Infinity ? percentageDelta.toFixed(1) + '%' : (delta > 0 ? '+Inf%' : (delta < 0 ? '-Inf%': '0%'))})</span>`;
+            if (count >= 2) {
+                baselineSelectionContainer.classList.remove('hidden');
+                const currentBaselineVal = baselineRunSelect.value;
+                baselineRunSelect.innerHTML = '<option value="">None (Raw Values)</option>';
+                selectedRunIdsForCompare.forEach(run => {
+                    const option = document.createElement('option');
+                    option.value = run.id;
+                    option.textContent = run.name;
+                    if (run.id === currentBaselineVal) {
+                        option.selected = true;
                     }
-                    tableHtml += `<td class="${run.id === baselineRunId ? 'baseline' : ''}">${displayValue}${deltaHtml}</td>`;
+                    baselineRunSelect.appendChild(option);
                 });
-                tableHtml += `</tr>`;
-            });
-        });
-
-        tableHtml += '</tbody></table>';
-        comparisonTableContainer.innerHTML = tableHtml;
-    }
-
-    function getNestedValue(obj, path) {
-        if (!obj || !path) return null;
-        const parts = path.split('.');
-        let current = obj;
-        for (const part of parts) {
-            if (current === null || current === undefined || typeof current !== 'object' || !current.hasOwnProperty(part)) {
-                return null;
-            }
-            current = current[part];
-        }
-        return current;
-    }
-
-
-    async function fetchAndShowDetails(runId) { /* ... existing code ... */
-        modalRunId.textContent = `Details for Run: ${runId.substring(0,15)}...`;
-        modalContent.innerHTML = '<p class="text-center py-4">Loading details...</p>';
-        detailsModal.classList.remove('hidden');
-
-        try {
-            const response = await fetch(`/api/loadtest/history/${runId}/details`);
-            if (!response.ok) {
-                 if (response.status === 404) throw new Error('Details not found for this run.');
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const details = await response.json();
-            renderDetailsInModal(details);
-        } catch (error) {
-            console.error(`Error fetching details for ${runId}:`, error);
-            modalContent.innerHTML = `<p class="text-red-600 text-center py-4">Error loading details: ${error.message}</p>`;
-        }
-    }
-
-    function renderDetailsInModal(targetReports) { /* ... existing code ... */
-         if (!targetReports || targetReports.length === 0) {
-            modalContent.innerHTML = '<p class="text-center py-4">No detailed metrics available for this run.</p>';
-            return;
-        }
-        let html = '<div class="space-y-4">';
-        targetReports.forEach(target => {
-            html += `<div class="p-3 border rounded-md bg-gray-50 shadow-sm">`;
-            html += `<h4 class="font-semibold text-md text-blue-700">${target.name}</h4>`;
-            html += `<p class="text-xs text-gray-500 break-all">${target.method} - ${target.url}</p>`;
-            html += `<ul class="list-disc list-inside text-sm mt-2 space-y-1">`;
-            html += `<li>Initiated: ${formatNumber(target.initiatedRequests)}</li>`;
-            html += `<li>Throttled: ${formatNumber(target.throttledRequests)}</li>`;
-            html += `<li>Dropped (BP): ${formatNumber(target.backpressureDroppedRequests)}</li>`;
-            html += `<li>Successful (2xx): <span class="text-green-600 font-medium">${formatNumber(target.successfulRequests)}</span></li>`;
-            html += `<li>Failed (non-2xx): <span class="text-red-600 font-medium">${formatNumber(target.failedRequests)}</span></li>`;
-            if (target.latencyData) {
-                html += `<li>Avg Latency: ${formatNumber(target.latencyData.avg, 2)} ms</li>`;
-                html += `<li>Max Latency: ${formatNumber(target.latencyData.max, 2)} ms</li>`;
-                html += `<li>Latency Samples: ${formatNumber(target.latencyData.count)}</li>`;
             } else {
-                 html += `<li>Latency Data: N/A</li>`;
+                baselineSelectionContainer.classList.add('hidden');
+                comparisonResultArea.classList.add('hidden');
             }
-             html += `<li>Status Codes: <pre class="text-xs bg-gray-100 p-1 rounded overflow-x-auto">${JSON.stringify(target.statusCodeCounts || {}, null, 2)}</pre></li>`;
-            html += `</ul></div>`;
+        }
+
+        compareSelectedButton.addEventListener('click', async () => {
+            if (selectedRunIdsForCompare.size < 2) {
+                alert("Please select at least two runs to compare.");
+                return;
+            }
+            const runIdsArray = Array.from(selectedRunIdsForCompare).map(item => item.id);
+            const selectedBaselineRunId = baselineRunSelect.value;
+
+            comparisonTableContainer.innerHTML = '<p class="text-center py-4">Loading comparison data...</p>';
+            comparisonResultArea.classList.remove('hidden');
+
+            try {
+                let apiUrl = `/api/loadtest/compare?runIds=${runIdsArray.join(',')}`;
+                if (selectedBaselineRunId) {
+                    apiUrl += `&baselineRunId=${selectedBaselineRunId}`;
+                }
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+                const comparisonData = await response.json();
+                renderComparisonTable(comparisonData);
+            } catch (error) {
+                console.error('Error fetching comparison data:', error);
+                comparisonTableContainer.innerHTML = `<p class="text-red-600 text-center py-4">Error loading comparison: ${error.message}</p>`;
+            }
         });
-        html += '</div>';
-        modalContent.innerHTML = html;
-    }
-
-
-    closeModalButton.addEventListener('click', () => detailsModal.classList.add('hidden'));
-    closeModalButtonBottom.addEventListener('click', () => detailsModal.classList.add('hidden'));
-
-
-    function formatNumber(num, decimalPlaces = 0) {
-        if (num === null || num === undefined) return 'N/A';
-        return Number(num).toLocaleString(undefined, {
-            minimumFractionDigits: decimalPlaces,
-            maximumFractionDigits: decimalPlaces
+        baselineRunSelect.addEventListener('change', () => {
+            if (selectedRunIdsForCompare.size >= 2 && compareSelectedButton.disabled === false) {
+                compareSelectedButton.click();
+            }
         });
-    }
 
-    document.addEventListener('DOMContentLoaded', fetchHistory);
+        function renderComparisonTable(data) {
+            if (!data || !data.comparedRuns || data.comparedRuns.length === 0) {
+                comparisonTableContainer.innerHTML = '<p class="text-center py-4">No data to compare.</p>';
+                return;
+            }
+
+            const baselineRunId = data.baselineRunId;
+            const runs = data.comparedRuns;
+            const metricsToDisplay = [
+                { key: 'initiatedRequests', label: 'Initiated', format: formatNumber },
+                { key: 'successfulRequests', label: 'Successful', format: formatNumber },
+                { key: 'failedRequests', label: 'Failed', format: formatNumber },
+                { key: 'latencyData.avg', label: 'Avg Latency', format: (v) => formatNumber(v, 2) + " ms" },
+                { key: 'latencyData.max', label: 'Max Latency', format: (v) => formatNumber(v, 2) + " ms" },
+            ];
+
+            const allApiNames = new Set();
+            runs.forEach(run => {
+                (run.metrics || []).forEach(metric => allApiNames.add(metric.name));
+            });
+
+            if (allApiNames.size === 0) {
+                comparisonTableContainer.innerHTML = '<p class="text-center py-4">No API target metrics found in selected runs.</p>';
+                return;
+            }
+
+            let tableHtml = '<table class="min-w-full divide-y divide-gray-200">';
+            tableHtml += `<thead class="bg-gray-50"><tr>
+                            <th class="sticky-col left-0 bg-gray-50 z-20 px-2 py-3">API Target</th>
+                            <th class="sticky-col left-metric bg-gray-50 z-20 px-2 py-3">Metric</th>`;
+            runs.forEach(run => {
+                const runDisplayName = `${run.runId.substring(0,8)}... (${run.reportTimestamp ? new Date(run.reportTimestamp).toLocaleDateString() : 'Date N/A'})`;
+                tableHtml += `<th class="${run.id === baselineRunId ? 'baseline' : ''} px-2 py-3">${runDisplayName}</th>`;
+            });
+            tableHtml += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+
+            allApiNames.forEach(apiName => {
+                metricsToDisplay.forEach((metricInfo, metricIdx) => {
+                    tableHtml += `<tr>`;
+                    if (metricIdx === 0) {
+                        tableHtml += `<td rowspan="${metricsToDisplay.length}" class="font-semibold sticky-col left-0 bg-white z-10 align-top pt-3 px-2 api-name-label">${apiName}</td>`;
+                    }
+                    tableHtml += `<td class="sticky-col left-metric bg-white z-10 px-2 metric-label">${metricInfo.label}</td>`;
+
+                    let baselineValue = null;
+                    if (baselineRunId) {
+                        const baselineRunData = runs.find(r => r.id === baselineRunId);
+                        const baselineApiMetric = baselineRunData?.metrics?.find(m => m.name === apiName);
+                        baselineValue = getNestedValue(baselineApiMetric, metricInfo.key);
+                    }
+
+                    runs.forEach(run => {
+                        const apiMetric = run.metrics?.find(m => m.name === apiName);
+                        let value = getNestedValue(apiMetric, metricInfo.key);
+                        let displayValue = (value !== null && value !== undefined) ? metricInfo.format(value) : 'N/A';
+
+                        let deltaHtml = "";
+                        if (baselineRunId && run.id !== baselineRunId && baselineValue !== null && value !== null && value !== undefined && !isNaN(baselineValue) && !isNaN(value)) {
+                            const delta = value - baselineValue;
+                            const percentageDelta = baselineValue !== 0 ? (delta / baselineValue) * 100 : (delta !== 0 ? (delta > 0 ? Infinity : -Infinity) : 0);
+
+                            let deltaClass = "";
+                            if (metricInfo.key.includes('latency') || metricInfo.key.includes('failed')) {
+                                if (delta < 0) deltaClass = 'delta-positive';
+                                else if (delta > 0) deltaClass = 'delta-negative';
+                            } else {
+                                if (delta > 0) deltaClass = 'delta-positive';
+                                else if (delta < 0) deltaClass = 'delta-negative';
+                            }
+                            deltaHtml = ` <br/><span class="text-xs ${deltaClass}">(${delta >= 0 ? '+' : ''}${metricInfo.format(delta)}${Math.abs(percentageDelta) === Infinity || isNaN(percentageDelta) ? '' : ' / ' + (percentageDelta >= 0 ? '+' : '') + percentageDelta.toFixed(1) + '%'})</span>`;
+                        }
+                        tableHtml += `<td class="${run.id === baselineRunId ? 'baseline' : ''} px-2">${displayValue}${deltaHtml}</td>`;
+                    });
+                    tableHtml += `</tr>`;
+                });
+            });
+
+            tableHtml += '</tbody></table>';
+            comparisonTableContainer.innerHTML = tableHtml;
+        }
+
+        function getNestedValue(obj, path) {
+            if (!obj || !path) return null;
+            const parts = path.split('.');
+            let current = obj;
+            for (const part of parts) {
+                if (current === null || current === undefined || typeof current !== 'object' || !current.hasOwnProperty(part)) {
+                    return null;
+                }
+                current = current[part];
+            }
+            return current;
+        }
+
+        async function fetchAndShowDetails(runId) {
+            modalRunId.textContent = `Details for Run: ${runId.substring(0,15)}...`;
+            modalContent.innerHTML = '<p class="text-center py-4">Loading details...</p>';
+            detailsModal.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`/api/loadtest/history/${runId}/details`);
+                if (!response.ok) {
+                     if (response.status === 404) throw new Error('Details not found for this run.');
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const details = await response.json();
+                renderDetailsInModal(details);
+            } catch (error) {
+                console.error(`Error fetching details for ${runId}:`, error);
+                modalContent.innerHTML = `<p class="text-red-600 text-center py-4">Error loading details: ${error.message}</p>`;
+            }
+        }
+
+        function renderDetailsInModal(targetReports) {
+             if (!targetReports || targetReports.length === 0) {
+                modalContent.innerHTML = '<p class="text-center py-4">No detailed metrics available for this run.</p>';
+                return;
+            }
+            let html = '<div class="space-y-4">';
+            targetReports.forEach(target => {
+                html += `<div class="p-3 border rounded-md bg-gray-50 shadow-sm">`;
+                html += `<h4 class="font-semibold text-md text-blue-700">${target.name}</h4>`;
+                html += `<p class="text-xs text-gray-500 break-all">${target.method} - ${target.url}</p>`;
+                html += `<ul class="list-disc list-inside text-sm mt-2 space-y-1">`;
+                html += `<li>Initiated: ${formatNumber(target.initiatedRequests)}</li>`;
+                html += `<li>Throttled: ${formatNumber(target.throttledRequests)}</li>`;
+                html += `<li>Dropped (BP): ${formatNumber(target.backpressureDroppedRequests)}</li>`;
+                html += `<li>Successful (2xx): <span class="text-green-600 font-medium">${formatNumber(target.successfulRequests)}</span></li>`;
+                html += `<li>Failed (non-2xx): <span class="text-red-600 font-medium">${formatNumber(target.failedRequests)}</span></li>`;
+                if (target.latencyData) {
+                    html += `<li>Avg Latency: ${formatNumber(target.latencyData.avg, 2)} ms</li>`;
+                    html += `<li>Max Latency: ${formatNumber(target.latencyData.max, 2)} ms</li>`;
+                    html += `<li>Latency Samples: ${formatNumber(target.latencyData.count)}</li>`;
+                } else {
+                     html += `<li>Latency Data: N/A</li>`;
+                }
+                 html += `<li>Status Codes: <pre class="text-xs bg-gray-100 p-1 rounded mt-1 max-w-full overflow-x-auto">${JSON.stringify(target.statusCodeCounts || {}, null, 2)}</pre></li>`;
+                html += `</ul></div>`;
+            });
+            html += '</div>';
+            modalContent.innerHTML = html;
+        }
+
+        closeModalButton.addEventListener('click', () => detailsModal.classList.add('hidden'));
+        closeModalButtonBottom.addEventListener('click', () => detailsModal.classList.add('hidden'));
+
+        function formatNumber(num, decimalPlaces = 0) {
+            if (num === null || num === undefined) return 'N/A';
+            return Number(num).toLocaleString(undefined, {
+                minimumFractionDigits: decimalPlaces,
+                maximumFractionDigits: decimalPlaces
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchHistory);
+    //]]>
 </script>
 </body>
 </html>

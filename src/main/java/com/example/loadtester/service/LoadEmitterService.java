@@ -73,12 +73,6 @@ public class LoadEmitterService implements DisposableBean {
         });
     }
 
-    /**
-     * Starts the load generation emitters using the provided LoadTesterProperties.
-     * @param runId The unique identifier for this load test run.
-     * @param propertiesToUse The configuration properties to use for this run.
-     * @param configName The display name of the configuration being used.
-     */
     public synchronized void startEmitters(String runId, LoadTesterProperties propertiesToUse, String configName) {
         if (emittersRunning.get()) {
             logger.info("Load emitters are already running under run ID: {}. Cannot start a new session.", this.currentRunId.get());
@@ -101,14 +95,14 @@ public class LoadEmitterService implements DisposableBean {
         List<LoadTesterProperties.TargetEndpoint> targets = propertiesToUse.getTargets();
         if (targets == null || targets.isEmpty()) {
             logger.warn("No targets configured for run ID: {}. Cannot start emitters.", runId);
-            finalizeRunSessionState(); // Clear run state as nothing will start
+            finalizeRunSessionState();
             return;
         }
 
         if (timedStopFuture != null && !timedStopFuture.isDone()) {
             timedStopFuture.cancel(false);
             logger.debug("Cancelled previous timed stop task as new session (run ID: {}) is starting.", runId);
-            timedStopFuture = null; // Reset future
+            timedStopFuture = null;
         }
 
         logger.info("Starting load emitters for {} targets for run ID: {}...", targets.size(), runId);
@@ -147,11 +141,10 @@ public class LoadEmitterService implements DisposableBean {
                 }
             }
 
-            // Ensure currentRunId.get() is not null before using it in tags
             String currentRunIdValue = this.currentRunId.get();
             if (currentRunIdValue == null) {
                 logger.error("Critical error: currentRunId is null during emitter setup for target {}. Aborting this target.", targetName);
-                continue; // Skip this target if runId is not set.
+                continue;
             }
 
 
@@ -165,13 +158,16 @@ public class LoadEmitterService implements DisposableBean {
 
             Flux<Long> flux = Flux.interval(Duration.ofMillis(intervalMs))
                     .onBackpressureDrop(droppedTick -> {
-                        logger.warn("[{}] (Run ID: {}) Backpressure applied, request tick {} dropped.", targetName, currentRunIdValue, droppedTick);
-                        meterRegistry.counter("loadtester.requests.backpressure.dropped", "target", targetName, "runId", currentRunIdValue).increment();
+                        String activeRunIdForDrop = this.currentRunId.get();
+                        if (activeRunIdForDrop != null) {
+                            logger.warn("[{}] (Run ID: {}) Backpressure applied, request tick {} dropped.", targetName, activeRunIdForDrop, droppedTick);
+                            meterRegistry.counter("loadtester.requests.backpressure.dropped", "target", targetName, "runId", activeRunIdForDrop).increment();
+                        }
                     });
 
             Disposable emitterSubscription = flux.subscribe(tick -> {
-                String activeRunId = this.currentRunId.get(); // Re-fetch in case it changed, though unlikely in this path
-                if (!emittersRunning.get() || activeRunId == null) { // Check global flag and ensure runId is still set
+                String activeRunId = this.currentRunId.get();
+                if (!emittersRunning.get() || activeRunId == null) {
                     Disposable d = activeEmitters.get(targetName);
                     if(d != null && !d.isDisposed()) {
                         d.dispose();
@@ -237,19 +233,19 @@ public class LoadEmitterService implements DisposableBean {
                 timedStopFuture = timedStopScheduler.schedule(() -> {
                     logger.info("Configured run duration of {} minutes reached for run ID: {}. Automatically stopping emitters.", runDurationMinutes, capturedRunId);
                     stopEmitters();
-                    LoadTesterProperties currentProps = activeRunProperties.get(); // Get props for the run that just ended
+                    LoadTesterProperties currentProps = activeRunProperties.get();
                     if (currentProps != null && currentProps.getReporting() != null && currentProps.getReporting().getShutdown().isEnabled()) {
                         logger.info("Generating summary report after timed session completion for run ID: {} (as reporting.shutdown.enabled is true).", capturedRunId);
                         summaryReportingService.generateAndLogSummaryReport(capturedRunId);
                     }
-                    finalizeRunSessionState(); // Finalize state after report
+                    finalizeRunSessionState();
                 }, runDurationMinutes, TimeUnit.MINUTES);
             } else {
                 logger.info("Load test session (run ID: {}) configured to run indefinitely.", runId);
             }
         } else {
             logger.warn("No emitters were started for run ID: {}.", runId);
-            finalizeRunSessionState(); // Clear run state if nothing started
+            finalizeRunSessionState();
         }
     }
 
@@ -273,7 +269,7 @@ public class LoadEmitterService implements DisposableBean {
                 (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.PATCH)) {
             String body = payloadCache.get(ep.getName());
             String contentTypeHeader = ep.getHeaders() != null ? ep.getHeaders().get("Content-Type") : null;
-            MediaType mediaType = MediaType.APPLICATION_JSON; // Default
+            MediaType mediaType = MediaType.APPLICATION_JSON;
             if (contentTypeHeader != null) {
                 try {
                     mediaType = MediaType.parseMediaType(contentTypeHeader);
@@ -324,7 +320,7 @@ public class LoadEmitterService implements DisposableBean {
         if (timedStopFuture != null && !timedStopFuture.isDone()) {
             timedStopFuture.cancel(true);
             logger.info("Cancelled any pending scheduled timed stop of emitters for run ID: {}.", runIdForStop);
-            timedStopFuture = null; // Reset future
+            timedStopFuture = null;
         }
 
         activeEmitters.forEach((name, emitter) -> {
@@ -335,8 +331,6 @@ public class LoadEmitterService implements DisposableBean {
         });
         activeEmitters.clear();
         logger.info("All load emitters for run ID: {} have been commanded to stop.", runIdForStop);
-        // Note: finalizeRunSessionState() which clears currentRunId, activeRunProperties etc.
-        // should be called by the controller *after* any final report generation.
     }
 
     public String getCurrentRunId() {
@@ -345,22 +339,20 @@ public class LoadEmitterService implements DisposableBean {
     public String getCurrentConfigName() { return this.currentConfigName.get(); }
     public LoadTesterProperties getActiveRunProperties() { return this.activeRunProperties.get(); }
 
-
-    // Renamed to avoid confusion with controller's finalizeRunSession
     public synchronized void finalizeRunSessionState() {
         String oldRunId = this.currentRunId.getAndSet(null);
         this.activeRunProperties.set(null);
         this.currentConfigName.set("N/A");
         this.payloadCache.clear();
-        this.emittersRunning.set(false); // Ensure this is false
+        this.emittersRunning.set(false);
         if (timedStopFuture != null && !timedStopFuture.isDone()){
-            timedStopFuture.cancel(true); // Ensure timed stop is also cancelled
+            timedStopFuture.cancel(true);
             timedStopFuture = null;
         }
         if (oldRunId != null) {
             logger.info("Finalized session state for run ID: {}", oldRunId);
         }
-        if (!activeEmitters.isEmpty()) { // Should be empty if stopEmitters worked
+        if (!activeEmitters.isEmpty()) {
             logger.warn("Finalizing run session state, but activeEmitters map is not empty. Clearing it now.");
             activeEmitters.forEach((name, emitter) -> {
                 if (emitter != null && !emitter.isDisposed()) emitter.dispose();
@@ -369,7 +361,6 @@ public class LoadEmitterService implements DisposableBean {
         }
     }
 
-
     public boolean areEmittersRunning() {
         return emittersRunning.get();
     }
@@ -377,13 +368,11 @@ public class LoadEmitterService implements DisposableBean {
     @Override
     public void destroy() throws Exception {
         logger.info("Shutting down LoadEmitterService due to application context destruction.");
-        if (emittersRunning.get()) { // If a test is somehow still marked as running
+        if (emittersRunning.get()) {
             logger.warn("Emitters were marked as running during application destruction. Forcing stop and finalization.");
             stopEmitters();
-            // A final report might be missed here if shutdown reporting relied on the normal flow.
-            // The @PreDestroy in SummaryReportingService should ideally handle its own final report.
         }
-        finalizeRunSessionState(); // Ensure all state is cleared
+        finalizeRunSessionState();
 
         if (timedStopScheduler != null && !timedStopScheduler.isShutdown()) {
             logger.info("Shutting down the timedStopScheduler...");

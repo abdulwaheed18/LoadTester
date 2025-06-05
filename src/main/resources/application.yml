@@ -6,7 +6,7 @@ loadtester:
   runDurationMinutes: 1 # Application will run for X minutes then shutdown (if old logic is still present). 0 or negative means run indefinitely.
   # For new UI-driven runs, this can be overridden by TestConfiguration.
   targets: # This becomes the "default" configuration if no user-defined config is selected
-    - name: API-1
+    - name: API-1-Default-From-YML
       url: https://dummyjson.com/auth/login
       method: POST
       headers:
@@ -14,7 +14,7 @@ loadtester:
       payloadPath: classpath:payloads/foo.json
       desiredTps: 1 # Adjusted for practical testing; was 300
       throttleIntervalMs: 100 # e.g., 1 request every 2000ms max if desiredTps is high
-    - name: API-2
+    - name: API-2-Default-From-YML
       url: https://dummyjson.com/auth/login
       method: POST
       headers:
@@ -28,16 +28,15 @@ loadtester:
       summaryIntervalMs: 60000
     shutdown:
       enabled: true
-    html: # This setting might become part of TestHistoryService logic for saving reports
+    html:
       enabled: true
-      # filePath: "./loadtest-summary-report.html" # filePath for shutdown HTML report (now managed by history service per run)
     history:
-      directory: "./reports/history" # Base directory for all historical run data (HTML, JSON, CSV per runId)
+      directory: "./reports/history"
       saveJson: true
       saveCsv: true
 
-  configurations: # New section for user-defined configurations
-    directory: "./test_configs" # Directory to store user-defined JSON test configurations
+  configurations:
+    directory: "./test_configs"
 
 
 management:

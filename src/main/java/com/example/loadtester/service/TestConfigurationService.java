@@ -1,8 +1,8 @@
+// src/main/java/com/example/loadtester/service/TestConfigurationService.java
 package com.example.loadtester.service;
 
 import com.example.loadtester.config.LoadTesterProperties;
 import com.example.loadtester.model.TestConfiguration;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import org.slf4j.Logger;
@@ -11,12 +11,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -32,7 +30,7 @@ public class TestConfigurationService {
 
     public TestConfigurationService(ObjectMapper objectMapper,
                                     @Value("${loadtester.configurations.directory:./test_configs}") String configsDir) {
-        this.objectMapper = objectMapper.copy(); // Create a copy to configure independently
+        this.objectMapper = objectMapper.copy();
         this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
         this.configurationsDirectoryPath = Paths.get(configsDir);
     }
@@ -44,12 +42,10 @@ public class TestConfigurationService {
             logger.info("Test configurations directory initialized at: {}", configurationsDirectoryPath.toAbsolutePath());
         } catch (IOException e) {
             logger.error("Could not create test configurations directory: {}", configurationsDirectoryPath.toAbsolutePath(), e);
-            // Consider throwing a runtime exception if this directory is critical
         }
     }
 
     private Path getFilePathForConfig(String configId) {
-        // Sanitize configId to prevent path traversal issues, although UUIDs are generally safe
         String sanitizedId = configId.replaceAll("[^a-zA-Z0-9\\-]", "_");
         return configurationsDirectoryPath.resolve(sanitizedId + ".json");
     }
@@ -123,22 +119,14 @@ public class TestConfigurationService {
         }
     }
 
-    /**
-     * Converts a user-defined TestConfiguration into LoadTesterProperties
-     * that the LoadEmitterService can use.
-     * This is a utility method. The LoadEmitterService could also be adapted
-     * to use TestConfiguration directly.
-     */
     public LoadTesterProperties convertToLoadTesterProperties(TestConfiguration userConfig, LoadTesterProperties baseProperties) {
         LoadTesterProperties dynamicProps = new LoadTesterProperties();
 
-        // Copy over non-overridden properties from base (application.yml defaults)
-        // For simplicity, we are only setting runDuration and targets here.
-        // A more complete solution would merge more deeply or provide a UI for all properties.
         if (baseProperties != null && baseProperties.getReporting() != null) {
-            dynamicProps.setReporting(baseProperties.getReporting()); // Preserve reporting settings
+            dynamicProps.setReporting(baseProperties.getReporting());
+        } else {
+            dynamicProps.setReporting(new LoadTesterProperties.Reporting());
         }
-
 
         dynamicProps.setRunDurationMinutes(userConfig.getRunDurationMinutes());
 

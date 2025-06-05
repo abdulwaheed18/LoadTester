@@ -2,6 +2,7 @@
 package com.example.loadtester.controller;
 
 import com.example.loadtester.config.LoadTesterProperties;
+import com.example.loadtester.dto.StartTestRequest;
 import com.example.loadtester.model.TestConfiguration;
 import com.example.loadtester.service.LoadEmitterService;
 import com.example.loadtester.service.SummaryReportingService;
@@ -106,6 +107,8 @@ public class LoadTestController {
                                 targetInfo.put("desiredTps", target.getDesiredTps());
                                 targetInfo.put("throttleIntervalMs", target.getThrottleIntervalMs());
                                 targetInfo.put("hasPayload", target.getPayloadPath() != null && !target.getPayloadPath().isEmpty());
+                                targetInfo.put("headers", target.getHeaders());
+                                targetInfo.put("payloadPath", target.getPayloadPath());
                                 return targetInfo;
                             }).collect(Collectors.toList()));
                 }
@@ -192,11 +195,10 @@ public class LoadTestController {
         }
     }
 
-    @PostMapping("/api/loadtest/start")
+    @PostMapping(value = "/api/loadtest/start", consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> startLoadTest(@RequestParam(required = false) String configurationId) {
-        logger.info("Received request to start load test. Custom config ID: {}",
-                (configurationId == null || configurationId.isEmpty()) ? "None (using default)" : configurationId);
+    public ResponseEntity<Map<String, Object>> startLoadTest(@RequestBody StartTestRequest startRequest) {
+        logger.info("Received request to start load test with custom parameters: {}", startRequest);
         Map<String, Object> response = new HashMap<>();
         try {
             if (loadEmitterService.areEmittersRunning()) {
@@ -206,40 +208,56 @@ public class LoadTestController {
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
             }
 
-            LoadTesterProperties propertiesToUse;
-            String loadedConfigName;
+            if (startRequest.getTargets() == null || startRequest.getTargets().isEmpty()) {
+                response.put("message", "No targets specified in the request. Cannot start test.");
+                logger.warn("Start test request received with no targets.");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
 
-            if (configurationId != null && !configurationId.isEmpty()) {
-                Optional<TestConfiguration> userConfigOpt = testConfigurationService.getConfigurationById(configurationId);
-                if (userConfigOpt.isPresent()) {
-                    TestConfiguration userConfig = userConfigOpt.get();
-                    propertiesToUse = testConfigurationService.convertToLoadTesterProperties(userConfig, defaultLoadTesterProperties);
-                    loadedConfigName = userConfig.getName();
-                    logger.info("Starting test with user-defined configuration: {} (ID: {})", loadedConfigName, configurationId);
+            LoadTesterProperties propertiesToUse = new LoadTesterProperties();
+            propertiesToUse.setRunDurationMinutes(startRequest.getRunDurationMinutes());
+            propertiesToUse.setTargets(startRequest.getTargets());
+            if (defaultLoadTesterProperties.getReporting() != null) {
+                propertiesToUse.setReporting(defaultLoadTesterProperties.getReporting());
+            }
+
+
+            String loadedConfigName = "Custom Ad-hoc Configuration";
+            if (startRequest.getBaseConfigurationId() != null && !startRequest.getBaseConfigurationId().isEmpty()) {
+                Optional<TestConfiguration> baseConfigOpt = testConfigurationService.getConfigurationById(startRequest.getBaseConfigurationId());
+                if (baseConfigOpt.isPresent()) {
+                    loadedConfigName = baseConfigOpt.get().getName() + " (with overrides)";
                 } else {
-                    response.put("message", "Configuration ID '" + configurationId + "' not found. Cannot start test.");
-                    logger.warn("Configuration ID {} not found.", configurationId);
-                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+                    logger.warn("Base configuration ID {} provided in start request but not found. Using generic name.", startRequest.getBaseConfigurationId());
+                    loadedConfigName = "Ad-hoc (based on missing ID: " + startRequest.getBaseConfigurationId().substring(0, Math.min(8, startRequest.getBaseConfigurationId().length())) + "...)";
                 }
             } else {
-                propertiesToUse = defaultLoadTesterProperties;
-                loadedConfigName = "Default (application.yml)";
-                logger.info("Starting test with default configuration from application.yml.");
+                boolean isLikeDefault = true;
+                if(defaultLoadTesterProperties.getRunDurationMinutes() != startRequest.getRunDurationMinutes()) isLikeDefault = false;
+                if(isLikeDefault && defaultLoadTesterProperties.getTargets() != null && defaultLoadTesterProperties.getTargets().size() == startRequest.getTargets().size()){
+                } else {
+                    isLikeDefault = false;
+                }
+                if(isLikeDefault && !startRequest.getTargets().isEmpty()) loadedConfigName = "Default (with overrides)";
             }
+
+            logger.info("Effective configuration for this run: {} targets, duration {} mins.",
+                    propertiesToUse.getTargets().size(), propertiesToUse.getRunDurationMinutes());
+
 
             String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
             String uniquePart = UUID.randomUUID().toString().substring(0, 8);
             String runId = "run_" + timestamp + "_" + uniquePart;
 
-            // *** FIX: Pass the loadedConfigName as the third argument ***
             loadEmitterService.startEmitters(runId, propertiesToUse, loadedConfigName);
 
             response.put("message", "Load test started successfully with run ID: " + runId + " using configuration: " + loadedConfigName);
             response.put("runId", runId);
             response.put("configName", loadedConfigName);
+            response.put("runDurationMinutes", propertiesToUse.getRunDurationMinutes()); // Crucial for progress bar
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            logger.error("Error starting load test", e);
+            logger.error("Error starting load test with custom parameters", e);
             response.put("message", "Error starting load test: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
@@ -260,21 +278,18 @@ public class LoadTestController {
             loadEmitterService.stopEmitters();
 
             LoadTesterProperties currentRunProps = loadEmitterService.getActiveRunProperties();
-            // Determine if shutdown report is enabled based on the properties active during the run,
-            // or fall back to default if for some reason activeRunProps is null.
             boolean shutdownReportEnabled = defaultLoadTesterProperties.getReporting().getShutdown().isEnabled();
             if (currentRunProps != null && currentRunProps.getReporting() != null && currentRunProps.getReporting().getShutdown() != null) {
                 shutdownReportEnabled = currentRunProps.getReporting().getShutdown().isEnabled();
-            } else if (currentRunProps == null) {
+            } else if (currentRunProps == null && currentRunId != null) {
                 logger.warn("activeRunProperties was null during stopLoadTest for runId: {}. Using default reporting settings for shutdown report decision.", currentRunId);
             }
-
 
             if (currentRunId != null && shutdownReportEnabled) {
                 logger.info("Generating final report for manually stopped run ID: {}", currentRunId);
                 summaryReportingService.generateAndLogSummaryReport(currentRunId);
             }
-            loadEmitterService.finalizeRunSessionState(); // Use the corrected method name
+            loadEmitterService.finalizeRunSessionState();
 
             response.put("message", "Load test (run ID: " + currentRunId + ") stopped successfully.");
             return ResponseEntity.ok(response);
@@ -305,6 +320,10 @@ public class LoadTestController {
         response.put("running", running);
         response.put("currentRunId", running ? loadEmitterService.getCurrentRunId() : null);
         response.put("currentConfigName", running ? loadEmitterService.getCurrentConfigName() : "N/A");
+        // Optionally return active run duration if test is running
+        if(running && loadEmitterService.getActiveRunProperties() != null) {
+            response.put("activeRunDurationMinutes", loadEmitterService.getActiveRunProperties().getRunDurationMinutes());
+        }
         return ResponseEntity.ok(response);
     }
 

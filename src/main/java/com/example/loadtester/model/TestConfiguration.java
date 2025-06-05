@@ -1,7 +1,6 @@
 // src/main/java/com/example/loadtester/model/TestConfiguration.java
 package com.example.loadtester.model;
 
-import com.example.loadtester.config.LoadTesterProperties; // For TargetEndpoint if we reuse
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.util.List;
@@ -12,38 +11,34 @@ import java.util.UUID;
 /**
  * Represents a user-defined load test configuration.
  */
-@JsonIgnoreProperties(ignoreUnknown = true) // Handles evolution of the class
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class TestConfiguration {
     private String id;
     private String name;
     private String description;
-    private int runDurationMinutes = 0; // Default to run indefinitely or as per global default
+    private int runDurationMinutes = 0;
 
     private List<TargetEndpointConfig> targets;
 
-    // Default constructor for Jackson
     public TestConfiguration() {
-        // Assign a default UUID if ID is not set, useful for new configurations
         if (this.id == null) {
             this.id = UUID.randomUUID().toString();
         }
     }
 
     public TestConfiguration(String name, String description, int runDurationMinutes, List<TargetEndpointConfig> targets) {
-        this(); // Call default constructor to ensure ID is set
+        this();
         this.name = name;
         this.description = description;
         this.runDurationMinutes = runDurationMinutes;
         this.targets = targets;
     }
 
-    // Getters and Setters
     public String getId() {
         return id;
     }
 
     public void setId(String id) {
-        // Ensure ID is set, typically only done by system or during deserialization if present
         this.id = (id == null || id.trim().isEmpty()) ? UUID.randomUUID().toString() : id;
     }
 
@@ -79,22 +74,16 @@ public class TestConfiguration {
         this.targets = targets;
     }
 
-    /**
-     * Represents a target endpoint within a TestConfiguration.
-     * This is similar to LoadTesterProperties.TargetEndpoint but defined locally
-     * for more flexibility with user-defined configurations.
-     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class TargetEndpointConfig {
         private String name;
         private String url;
         private String method;
         private Map<String, String> headers;
-        private String payloadPath; // Path to payload file (e.g., classpath:payloads/my_payload.json or relative file path)
+        private String payloadPath;
         private int desiredTps;
         private int throttleIntervalMs;
 
-        // Default constructor for Jackson
         public TargetEndpointConfig() {}
 
         public TargetEndpointConfig(String name, String url, String method, Map<String, String> headers, String payloadPath, int desiredTps, int throttleIntervalMs) {
@@ -107,7 +96,6 @@ public class TestConfiguration {
             this.throttleIntervalMs = throttleIntervalMs;
         }
 
-        // Getters and Setters
         public String getName() { return name; }
         public void setName(String name) { this.name = name; }
         public String getUrl() { return url; }

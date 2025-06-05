@@ -21,7 +21,6 @@
         .config-title { font-size: 1.125rem; font-semibold; color: #1f2937; margin-bottom: 0.75rem;}
         .config-item { margin-bottom: 0.5rem; font-size: 0.875rem; }
         .config-label { font-weight: 500; color: #374151; }
-        .target-card { border: 1px solid #d1d5db; padding: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem; background-color: white;}
         .modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background-color: rgba(0,0,0,0.5); display: flex;
@@ -30,12 +29,12 @@
         }
         .modal.active { opacity: 1; visibility: visible; }
         .modal-content {
-            background-color: white; padding: 1.5rem 2rem; /* Adjusted padding */
+            background-color: white; padding: 1.5rem 2rem;
             border-radius: 0.5rem;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 90%; max-width: 700px; /* Increased max-width */
-            max-height: 90vh; overflow-y: auto; /* Increased max-height */
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 90%; max-width: 700px;
+            max-height: 90vh; overflow-y: auto;
         }
-        .form-input, .form-select, .form-textarea { /* Combined styles */
+        .form-input, .form-select, .form-textarea {
             width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db;
             border-radius: 0.375rem; margin-top: 0.25rem; margin-bottom: 0.75rem;
             box-sizing: border-box; font-size: 0.875rem;
@@ -54,6 +53,51 @@
         .toast-success { background-color: #28a745; }
         .toast-error { background-color: #dc3545; }
         .toast-info { background-color: #17a2b8; }
+
+        .target-override-card {
+            background-color: white;
+            border: 1px solid #d1d5db;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+        .target-override-card .form-label-sm {
+            font-size: 0.75rem;
+            color: #4b5563;
+            margin-bottom: 0.125rem;
+        }
+        .target-override-card .form-input-sm {
+            padding: 0.375rem 0.5rem;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+             border: 1px solid #d1d5db;
+            border-radius: 0.25rem;
+        }
+        .target-override-card .original-value {
+            font-size: 0.75rem;
+            color: #6b7280;
+        }
+        /* Styles for the new duration progress bar */
+        .duration-progress-bar-bg {
+            width: 100%;
+            background-color: #e5e7eb; /* Tailwind gray-200 */
+            border-radius: 9999px; /* Tailwind rounded-full */
+            height: 1.25rem; /* Tailwind h-5 */
+            overflow: hidden; /* To contain the inner bar */
+        }
+        .duration-progress-bar-fill {
+            background-color: #3b82f6; /* Tailwind blue-500 */
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 0.3s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem; /* Tailwind text-xs */
+            font-weight: 500; /* Tailwind font-medium */
+            color: white;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 p-4 md:p-8">
@@ -69,14 +113,12 @@
         </div>
     </header>
 
-    <!-- Configuration Selection Section -->
     <div class="bg-white p-6 rounded-lg shadow-md mb-8">
         <h2 class="text-xl font-semibold mb-4 text-gray-700">Test Configuration</h2>
         <div class="mb-4">
             <label for="configSelection" class="form-label">Active Configuration:</label>
             <select id="configSelection" class="form-select mt-1 block w-full">
                 <option value="">Default (from application.yml)</option>
-                <!-- Options will be populated by JavaScript -->
             </select>
         </div>
         <button id="manageConfigsButton" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-150 ease-in-out">
@@ -87,18 +129,17 @@
         </div>
     </div>
 
-
-    <!-- Configuration Display Section (shows details of selected/default config) -->
     <div id="configDisplaySection" class="bg-white p-6 rounded-lg shadow-md mb-8">
-        <h2 class="text-xl font-semibold mb-4 text-gray-700">Effective Configuration Details</h2>
+        <h2 class="text-xl font-semibold mb-4 text-gray-700">Effective Configuration Details for Next Run</h2>
         <div id="configDetails">
             <p class="text-gray-500">Loading configuration...</p>
         </div>
     </div>
 
+    <!-- Test Control Section - Modified to include duration progress bar -->
     <div class="bg-white p-6 rounded-lg shadow-md mb-8">
         <h2 class="text-xl font-semibold mb-4">Test Control</h2>
-        <div class="flex space-x-4 items-center mb-2">
+        <div class="flex space-x-4 items-center mb-4"> <!-- Increased margin-bottom -->
             <button id="startButton"
                     class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-150 ease-in-out disabled:opacity-50">
                 Start Test
@@ -112,12 +153,24 @@
                 <span id="testStatusBadge" class="status-badge">Initializing...</span>
             </div>
         </div>
-        <div class="text-sm text-gray-500">
+        <div class="text-sm text-gray-500 mb-3"> <!-- Increased margin-bottom -->
             Current Run ID: <span id="currentRunIdLabel" class="font-mono">N/A</span>
+        </div>
+
+        <!-- Test Duration Progress Bar - NEW -->
+        <div id="testDurationProgressContainer" class="hidden mt-2"> <!-- Initially hidden -->
+            <div class="flex justify-between text-sm text-gray-600 mb-1">
+                <span id="elapsedTimeLabel">00:00</span>
+                <span id="totalDurationLabel">00:00</span>
+            </div>
+            <div class="duration-progress-bar-bg">
+                <div id="durationProgressBar" class="duration-progress-bar-fill" style="width: 0%;">
+                    0%
+                </div>
+            </div>
         </div>
     </div>
     <div id="messageArea" class="fixed bottom-5 right-5 z-50"></div>
-
 
     <div class="bg-white p-6 rounded-lg shadow-md">
         <h2 class="text-xl font-semibold mb-4">Live Metrics</h2>
@@ -129,7 +182,6 @@
     </div>
 </div>
 
-<!-- Modal for Managing Configurations -->
 <div id="configManagerModal" class="modal">
     <div class="modal-content">
         <div class="flex justify-between items-center mb-6">
@@ -146,10 +198,8 @@
                 </ul>
             </div>
         </div>
-
         <hr class="my-6">
-
-        <div id="configFormContainer" class="hidden"> <!-- Hidden by default -->
+        <div id="configFormContainer" class="hidden">
             <h4 id="configFormTitle" class="text-xl font-medium text-gray-700 mb-4">Create New Configuration</h4>
             <form id="configForm">
                 <input type="hidden" id="configIdInput">
@@ -165,13 +215,10 @@
                     <label for="configRunDurationInput" class="form-label">Run Duration (minutes, 0 for indefinite):</label>
                     <input type="number" id="configRunDurationInput" class="form-input" min="0" value="0">
                 </div>
-
                 <h5 class="text-md font-medium text-gray-700 mt-5 mb-3">Targets:</h5>
                 <div id="targetsContainer" class="space-y-4">
-                    <!-- Target blocks will be added here by JS -->
                 </div>
                 <button type="button" id="addTargetButton" class="mt-3 bg-blue-500 hover:bg-blue-600 text-white text-sm py-1.5 px-3 rounded-md">Add Target</button>
-
                 <div class="mt-8 flex justify-end space-x-3">
                     <button type="button" id="cancelConfigForm" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg">Cancel/Clear Form</button>
                     <button type="submit" id="saveConfigButton" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg">Save Configuration</button>
@@ -181,19 +228,6 @@
     </div>
 </div>
 
-<!--
-    Regarding Thymeleaf error: "Could not parse as expression: "'',''" (template: "dashboard" - line 574, col 80)"
-    This error indicates that a th:* attribute in your dashboard.html (or an included fragment)
-    literally contains the string "'',''" (or something like "'' , ''") which Thymeleaf tried to parse as an expression.
-    The version of dashboard.html above primarily uses client-side JavaScript for dynamic content and has minimal th:* attributes in the body.
-    If this error persists with this version:
-    1. Double-check your local 'dashboard.html' for any th:* attributes (e.g., th:onclick, th:attr, th:data-*)
-       that might inadvertently contain or evaluate to the literal string "'',''".
-    2. Check any Thymeleaf fragments or layouts included in dashboard.html.
-    3. The line number (574) might be misleading if the error is due to an earlier HTML parsing issue (e.g., unclosed quotes)
-       causing Thymeleaf to misinterpret subsequent content.
-    The th:inline="none" attribute below is a defensive measure, though the reported error type usually points to a th:* attribute's value.
--->
 <script th:inline="none">
     //<![CDATA[
         const startButton = document.getElementById('startButton');
@@ -223,8 +257,18 @@
         const cancelConfigFormButton = document.getElementById('cancelConfigForm');
         const currentConfigNameDisplay = document.getElementById('currentConfigNameDisplay').querySelector('span');
 
-        let statusInterval, metricsInterval;
+        // New elements for Duration Progress Bar
+        const testDurationProgressContainer = document.getElementById('testDurationProgressContainer');
+        const durationProgressBar = document.getElementById('durationProgressBar');
+        const elapsedTimeLabel = document.getElementById('elapsedTimeLabel');
+        const totalDurationLabel = document.getElementById('totalDurationLabel');
+
+        let statusInterval, metricsInterval, durationProgressInterval;
         let currentEditingConfigId = null;
+        let originalTargetsData = [];
+        let testStartTime = null;
+        let configuredTestDurationSeconds = 0;
+
 
         function showToast(text, type = 'info') {
             const toast = document.createElement('div');
@@ -254,46 +298,73 @@
                     throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
                 }
                 const config = await response.json();
-                renderTestConfigDetails(config);
+                renderConfigDetailsWithOverrides(config);
             } catch (error) {
                 console.error('Error fetching effective test configuration:', error);
                 configDetailsContainer.innerHTML = `<p class="text-red-500">Error loading configuration: ${error.message}</p>`;
+                originalTargetsData = [];
             }
         }
 
-        function renderTestConfigDetails(config) {
+        function renderConfigDetailsWithOverrides(config) {
             if (!config || Object.keys(config).length === 0) {
                 configDetailsContainer.innerHTML = '<p class="text-gray-500">No configuration data available.</p>';
+                originalTargetsData = [];
                 return;
             }
             if (config.error) {
                  configDetailsContainer.innerHTML = `<p class="text-red-500">Error loading configuration: ${config.error}</p>`;
+                 originalTargetsData = [];
                 return;
             }
 
+            originalTargetsData = JSON.parse(JSON.stringify(config.targets || []));
+
             let html = `<div class="config-section">`;
-            html += `<div class="config-item"><span class="config-label">Active Config:</span> ${config.activeConfigurationName || 'Default'}</div>`;
-            html += `<div class="config-item"><span class="config-label">Run Duration:</span> ${config.runDurationMinutesConfigured > 0 ? config.runDurationMinutesConfigured + ' minutes' : 'Indefinite'}</div>`;
-            html += `<div class="config-item"><span class="config-label">Periodic Reporting:</span> ${config.periodicReportingEnabled ? 'Enabled (Every ' + (config.periodicReportIntervalMs/1000) + 's)' : 'Disabled'}</div>`;
+            html += `<div class="config-item"><span class="config-label">Active Config Source:</span> ${config.activeConfigurationName || 'Default'}</div>`;
+            html += `<div class="config-item flex items-center space-x-2">
+                        <label for="globalRunDurationOverride" class="config-label">Run Duration (minutes):</label>
+                        <input type="number" id="globalRunDurationOverride" class="form-input-sm w-24" value="${config.runDurationMinutesConfigured > 0 ? config.runDurationMinutesConfigured : 0}" min="0">
+                        <span class="original-value">(Original: ${config.runDurationMinutesConfigured > 0 ? config.runDurationMinutesConfigured : 'Indefinite'})</span>
+                     </div>`;
             html += `</div>`;
 
             if (config.targets && config.targets.length > 0) {
-                html += `<h3 class="config-title mt-4">Targets (${config.targets.length}):</h3>`;
-                html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">`;
-                config.targets.forEach(target => {
-                    html += `<div class="target-card">
-                                <p class="font-semibold text-blue-600">${target.name}</p>
-                                <p class="text-xs text-gray-600 truncate" title="${target.url}">${target.method} - ${target.url}</p>
-                                <p class="text-xs"><span class="config-label">Desired TPS:</span> ${target.desiredTps === 0 ? 'Max Effort' : target.desiredTps}</p>
-                                <p class="text-xs"><span class="config-label">Throttle Interval:</span> ${target.throttleIntervalMs} ms</p>
-                                <p class="text-xs"><span class="config-label">Has Payload:</span> ${target.hasPayload ? 'Yes' : 'No'}</p>
+                html += `<h3 class="config-title mt-4">Targets for Next Run (${config.targets.length}):</h3>`;
+                html += `<div class="space-y-3">`;
+                config.targets.forEach((target, index) => {
+                    html += `<div class="target-override-card" data-target-original-name="${target.name}" data-target-index="${index}">
+                                <div class="flex justify-between items-center mb-2">
+                                    <h4 class="font-semibold text-blue-600">${target.name}</h4>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="targetEnabled_${index}" class="form-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded target-enable-checkbox mr-2" checked>
+                                        <label for="targetEnabled_${index}" class="text-sm text-gray-700">Run this API</label>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-600 truncate mb-1" title="${target.url}">${target.method} - ${target.url}</p>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                                    <div>
+                                        <label for="overrideTps_${index}" class="form-label-sm">Desired TPS:</label>
+                                        <input type="number" id="overrideTps_${index}" class="form-input-sm target-override-tps" value="${target.desiredTps}" min="0">
+                                        <span class="original-value">(Original: ${target.desiredTps === 0 ? 'Max Effort' : target.desiredTps})</span>
+                                    </div>
+                                    <div>
+                                        <label for="overrideThrottle_${index}" class="form-label-sm">Throttle Interval (ms):</label>
+                                        <input type="number" id="overrideThrottle_${index}" class="form-input-sm target-override-throttle" value="${target.throttleIntervalMs}" min="0">
+                                        <span class="original-value">(Original: ${target.throttleIntervalMs} ms)</span>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Payload: ${target.hasPayload ? `Yes (${target.payloadPath || 'N/A'})` : 'No'}</p>
                              </div>`;
                 });
                 html += `</div>`;
             } else {
-                html += '<p class="text-gray-500 mt-2">No targets configured in the effective configuration.</p>';
+                html += '<p class="text-gray-500 mt-2">No targets configured. Please select or create a configuration with targets.</p>';
             }
             configDetailsContainer.innerHTML = html;
+            if (startButton.disabled) {
+                 document.querySelectorAll('.target-override-tps, .target-override-throttle, .target-enable-checkbox, #globalRunDurationOverride').forEach(el => el.disabled = true);
+            }
         }
         configSelection.addEventListener('change', fetchEffectiveTestConfig);
 
@@ -302,26 +373,41 @@
                 const response = await fetch('/api/loadtest/isrunning');
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
-                if (data.running) {
-                    testStatusBadge.textContent = 'Running';
-                    testStatusBadge.className = 'status-badge status-running';
-                    startButton.disabled = true;
-                    stopButton.disabled = false;
-                    configSelection.disabled = true;
-                    manageConfigsButton.disabled = true;
+                const isRunning = data.running;
+
+                testStatusBadge.textContent = isRunning ? 'Running' : 'Stopped';
+                testStatusBadge.className = `status-badge ${isRunning ? 'status-running' : 'status-stopped'}`;
+                startButton.disabled = isRunning;
+                stopButton.disabled = !isRunning;
+                configSelection.disabled = isRunning;
+                manageConfigsButton.disabled = isRunning;
+
+                document.querySelectorAll('.target-override-tps, .target-override-throttle, .target-enable-checkbox, #globalRunDurationOverride').forEach(el => el.disabled = isRunning);
+
+                if (isRunning) {
                     currentRunIdLabel.textContent = data.currentRunId || 'N/A';
                     currentConfigNameDisplay.textContent = data.currentConfigName || 'N/A';
+                    // If a test is running on page load, we might need to fetch its duration if backend provides it
+                    // For now, progress bar only starts if test is initiated from this session
                 } else {
-                    testStatusBadge.textContent = 'Stopped';
-                    testStatusBadge.className = 'status-badge status-stopped';
-                    startButton.disabled = false;
-                    stopButton.disabled = true;
-                    configSelection.disabled = false;
-                    manageConfigsButton.disabled = false;
                     currentRunIdLabel.textContent = 'N/A';
                     currentConfigNameDisplay.textContent = configSelection.options[configSelection.selectedIndex]?.text || 'Default (application.yml)';
-                    if(configSelection.value){
+                    if (durationProgressInterval) clearInterval(durationProgressInterval);
+                    durationProgressInterval = null;
+                    testStartTime = null;
+                    if(testDurationProgressContainer) testDurationProgressContainer.classList.add('hidden'); // Hide progress bar when stopped
+                    if(durationProgressBar) {
+                        durationProgressBar.style.width = '0%';
+                        durationProgressBar.textContent = '0%';
+                    }
+                    if(elapsedTimeLabel) elapsedTimeLabel.textContent = "00:00";
+                    if(totalDurationLabel) totalDurationLabel.textContent = "00:00";
+
+
+                     if (!configSelection.value && originalTargetsData.length === 0) {
                         fetchEffectiveTestConfig();
+                    } else if (configSelection.value && !isRunning){
+                         fetchEffectiveTestConfig();
                     }
                 }
             } catch (error) {
@@ -344,7 +430,6 @@
                     if (noMetricsMessage) noMetricsMessage.textContent = 'Could not fetch metrics. Retrying...';
                 }
             } else if (testStatusBadge.textContent === 'Stopped' && metricsContainer.innerHTML !== '' && metricsContainer.firstChild?.id !== 'noMetricsMessage') {
-               // Keep old metrics displayed
             }
         }
         function renderMetrics(targets) {
@@ -397,34 +482,154 @@
                 metricsContainer.appendChild(card);
             });
         }
+
         function formatNumber(num, decimalPlaces = 0) {
             if (num === null || num === undefined) return 'N/A';
             return Number(num).toLocaleString(undefined, { minimumFractionDigits: decimalPlaces, maximumFractionDigits: decimalPlaces });
         }
 
-        startButton.addEventListener('click', async () => {
-            const selectedConfigId = configSelection.value;
-            let startUrl = '/api/loadtest/start';
-            if (selectedConfigId) {
-                startUrl += `?configurationId=${selectedConfigId}`;
+        // Helper function to format time from seconds to MM:SS
+        function formatTime(totalSeconds) {
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        // Function to update the duration progress bar
+        function updateDurationProgressBar() {
+            if (!testStartTime || configuredTestDurationSeconds <= 0) {
+                if(durationProgressInterval) clearInterval(durationProgressInterval);
+                if(testDurationProgressContainer) testDurationProgressContainer.classList.add('hidden');
+                return;
             }
 
-            showToast('Starting test...', 'info');
+            const elapsedSeconds = Math.floor((Date.now() - testStartTime) / 1000);
+            const progressPercentage = Math.min(100, (elapsedSeconds / configuredTestDurationSeconds) * 100);
+
+            if(durationProgressBar) {
+                durationProgressBar.style.width = `${progressPercentage.toFixed(1)}%`;
+                durationProgressBar.textContent = `${Math.floor(progressPercentage)}%`;
+            }
+            if(elapsedTimeLabel) elapsedTimeLabel.textContent = formatTime(elapsedSeconds);
+            // totalDurationLabel is set once when test starts
+
+            if (elapsedSeconds >= configuredTestDurationSeconds) {
+                if(durationProgressInterval) clearInterval(durationProgressInterval);
+                durationProgressInterval = null;
+                if(durationProgressBar) { // Ensure it reaches 100%
+                     durationProgressBar.style.width = `100%`;
+                     durationProgressBar.textContent = `100%`;
+                }
+                // Backend will stop the test. UI reflects completion.
+            }
+        }
+
+
+        startButton.addEventListener('click', async () => {
+            const selectedConfigId = configSelection.value;
+
+            const targetsToRun = [];
+            const targetOverrideCards = configDetailsContainer.querySelectorAll('.target-override-card');
+
+            targetOverrideCards.forEach((card) => {
+                const originalTargetName = card.dataset.targetOriginalName;
+                const enabledCheckbox = card.querySelector(`.target-enable-checkbox`);
+
+                if (enabledCheckbox && enabledCheckbox.checked) {
+                    const originalTarget = originalTargetsData.find(ot => ot.name === originalTargetName);
+                    if (!originalTarget) {
+                        console.warn(`Could not find original target data for: ${originalTargetName}`);
+                        showToast(`Error: Original data not found for target ${originalTargetName}. Skipping it.`, 'error');
+                        return;
+                    }
+
+                    const overrideTpsInput = card.querySelector(`.target-override-tps`);
+                    const overrideThrottleInput = card.querySelector(`.target-override-throttle`);
+
+                    const effectiveTarget = { ...originalTarget };
+
+                    const tpsValue = overrideTpsInput.value.trim();
+                    effectiveTarget.desiredTps = tpsValue !== "" ? parseInt(tpsValue, 10) : originalTarget.desiredTps;
+                    if (isNaN(effectiveTarget.desiredTps) || effectiveTarget.desiredTps < 0) effectiveTarget.desiredTps = originalTarget.desiredTps;
+
+
+                    const throttleValue = overrideThrottleInput.value.trim();
+                    effectiveTarget.throttleIntervalMs = throttleValue !== "" ? parseInt(throttleValue, 10) : originalTarget.throttleIntervalMs;
+                    if (isNaN(effectiveTarget.throttleIntervalMs) || effectiveTarget.throttleIntervalMs < 0) effectiveTarget.throttleIntervalMs = originalTarget.throttleIntervalMs;
+
+                    targetsToRun.push(effectiveTarget);
+                }
+            });
+
+            if (targetsToRun.length === 0 && targetOverrideCards.length > 0) {
+                showToast('No targets selected to run. Please enable at least one target.', 'error');
+                return;
+            }
+            if (targetOverrideCards.length === 0 && originalTargetsData.length === 0) {
+                 showToast('No targets are configured. Please select or create a valid configuration.', 'error');
+                return;
+            }
+
+            const globalRunDurationOverrideInput = document.getElementById('globalRunDurationOverride');
+            let runDurationMinutesForTest = 0;
+            if (globalRunDurationOverrideInput && globalRunDurationOverrideInput.value.trim() !== "") {
+                 runDurationMinutesForTest = parseInt(globalRunDurationOverrideInput.value, 10);
+                 if (isNaN(runDurationMinutesForTest) || runDurationMinutesForTest < 0) {
+                    // Try to get original from config object if input is invalid
+                    const configForDuration = originalTargetsData.length > 0 ? document.getElementById('configDisplaySection')._configData : null; // Store config data on element for access
+                    runDurationMinutesForTest = configForDuration ? (configForDuration.runDurationMinutesConfigured || 0) : 0;
+                 }
+            } else {
+                // Fallback to original value from the effectively loaded config (which renderConfigDetailsWithOverrides used)
+                const configForDuration = document.getElementById('configDisplaySection')._configData; // Need to store this
+                runDurationMinutesForTest = configForDuration ? (configForDuration.runDurationMinutesConfigured || 0) : 0;
+            }
+
+
+            const startPayload = {
+                baseConfigurationId: selectedConfigId || null,
+                runDurationMinutes: runDurationMinutesForTest,
+                targets: targetsToRun
+            };
+
+            showToast('Starting test with current settings...', 'info');
             try {
-                const response = await fetch(startUrl, { method: 'POST' });
-                const data = await response.json();
+                const response = await fetch('/api/loadtest/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json'},
+                    body: JSON.stringify(startPayload)
+                });
+                const data = await response.json(); // Assuming backend returns runDurationMinutesUsed
                 if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
 
                 showToast(data.message || 'Test started successfully.', 'success');
                 if(data.runId) currentRunIdLabel.textContent = data.runId;
+
+                // Setup duration progress bar
+                if (data.runDurationMinutes && data.runDurationMinutes > 0) { // Check if backend confirmed a duration
+                    configuredTestDurationSeconds = data.runDurationMinutes * 60;
+                    testStartTime = Date.now();
+                    if(testDurationProgressContainer) testDurationProgressContainer.classList.remove('hidden');
+                    if(totalDurationLabel) totalDurationLabel.textContent = formatTime(configuredTestDurationSeconds);
+                    updateDurationProgressBar(); // Initial call
+                    if (durationProgressInterval) clearInterval(durationProgressInterval);
+                    durationProgressInterval = setInterval(updateDurationProgressBar, 1000);
+                } else {
+                    configuredTestDurationSeconds = 0; // Indefinite run
+                    if(testDurationProgressContainer) testDurationProgressContainer.classList.add('hidden');
+                }
+
                 await updateTestRunningStatus();
                 fetchMetrics();
             } catch (error) {
                 console.error('Error starting test:', error);
                 showToast(`Error starting test: ${error.message}`, 'error');
+                if (durationProgressInterval) clearInterval(durationProgressInterval);
+                if(testDurationProgressContainer) testDurationProgressContainer.classList.add('hidden');
                 await updateTestRunningStatus();
             }
         });
+
         stopButton.addEventListener('click', async () => {
             showToast('Stopping test...', 'info');
             try {
@@ -432,6 +637,19 @@
                 const data = await response.json();
                  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
                 showToast(data.message || 'Test stopped successfully.', 'success');
+                // Clear duration progress bar elements on stop
+                if (durationProgressInterval) clearInterval(durationProgressInterval);
+                durationProgressInterval = null;
+                testStartTime = null;
+                configuredTestDurationSeconds = 0;
+                if(testDurationProgressContainer) testDurationProgressContainer.classList.add('hidden');
+                if(durationProgressBar) {
+                     durationProgressBar.style.width = '0%';
+                     durationProgressBar.textContent = '0%';
+                }
+                if(elapsedTimeLabel) elapsedTimeLabel.textContent = "00:00";
+                if(totalDurationLabel) totalDurationLabel.textContent = "00:00";
+
                 await updateTestRunningStatus();
             } catch (error) {
                 console.error('Error stopping test:', error);
@@ -447,7 +665,6 @@
             configFormContainer.classList.add('hidden');
         });
         closeConfigModalButton.addEventListener('click', () => configManagerModal.classList.remove('active'));
-
         createNewConfigButton.addEventListener('click', () => {
             resetConfigForm();
             configFormTitle.textContent = "Create New Configuration";
@@ -458,7 +675,6 @@
             resetConfigForm();
             configFormContainer.classList.add('hidden');
         });
-
         async function loadSavedConfigurationsToList() {
             savedConfigsList.innerHTML = '<li class="p-2">Loading...</li>';
             try {
@@ -488,7 +704,6 @@
                 savedConfigsList.innerHTML = '<li class="p-2 text-red-600">Error loading configurations.</li>';
             }
         }
-
         savedConfigsList.addEventListener('click', async (event) => {
             const target = event.target;
             if (target.classList.contains('edit-config-btn') || (target.tagName === 'SPAN' && target.dataset.configid)) {
@@ -502,7 +717,6 @@
                 }
             }
         });
-
         async function loadConfigIntoForm(configId) {
             try {
                 showToast('Loading configuration for edit...', 'info');
@@ -529,7 +743,6 @@
                 showToast('Failed to load configuration for editing.', 'error');
             }
         }
-
         async function deleteConfiguration(configId) {
             try {
                 const response = await fetch(`/api/loadtest/configurations/${configId}`, { method: 'DELETE' });
@@ -547,7 +760,6 @@
                 showToast('Failed to delete configuration: ' + error.message, 'error');
             }
         }
-
         function addTargetToForm(targetData = {}) {
             const targetIndex = targetsContainer.children.length;
             const targetDiv = document.createElement('div');
@@ -609,7 +821,6 @@
             `;
             targetsContainer.appendChild(targetDiv);
         }
-
         addTargetButton.addEventListener('click', () => addTargetToForm());
         targetsContainer.addEventListener('click', function(event) {
             if (event.target.classList.contains('remove-target-btn')) {
@@ -631,7 +842,6 @@
                  event.target.closest('div.flex').remove();
             }
         });
-
         function resetConfigForm() {
             configForm.reset();
             configIdInput.value = '';
@@ -715,7 +925,6 @@
                 showToast('Error saving configuration: ' + error.message, 'error');
             }
         });
-
         async function loadUserConfigurationsToSelection() {
             try {
                 const response = await fetch('/api/loadtest/configurations');
@@ -748,9 +957,8 @@
             updateTestRunningStatus();
             fetchMetrics();
 
-            // Adjusted intervals for more frequent updates
-            statusInterval = setInterval(updateTestRunningStatus, 1000); // Status updates every 1 second
-            metricsInterval = setInterval(fetchMetrics, 2000);      // Metrics updates every 2 seconds
+            statusInterval = setInterval(updateTestRunningStatus, 1000);
+            metricsInterval = setInterval(fetchMetrics, 2000);
 
             addTargetToForm();
             configFormContainer.classList.add('hidden');
@@ -759,6 +967,7 @@
         window.addEventListener('beforeunload', () => {
             if (statusInterval) clearInterval(statusInterval);
             if (metricsInterval) clearInterval(metricsInterval);
+            if (durationProgressInterval) clearInterval(durationProgressInterval);
         });
     //]]>
 </script>
