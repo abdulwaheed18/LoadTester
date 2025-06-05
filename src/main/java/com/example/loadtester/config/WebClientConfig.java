@@ -11,8 +11,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
+import reactor.netty.tcp.SslProvider; // Required for handlerConfigurator
 
 import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
 
 @Configuration
 public class WebClientConfig {
@@ -24,7 +27,7 @@ public class WebClientConfig {
         HttpClient httpClient;
         if (properties.getHttp().getSsl().isInsecureSkipVerify()) {
             logger.warn("****************************************************************************");
-            logger.warn("WARNING: SSL certificate validation is DISABLED globally for WebClient.");
+            logger.warn("WARNING: SSL certificate validation AND HOSTNAME VERIFICATION are DISABLED globally for WebClient.");
             logger.warn("This should ONLY be used in trusted development/testing environments.");
             logger.warn("DO NOT USE THIS CONFIGURATION IN PRODUCTION for external services.");
             logger.warn("****************************************************************************");
@@ -33,9 +36,20 @@ public class WebClientConfig {
                     .forClient()
                     .trustManager(InsecureTrustManagerFactory.INSTANCE)
                     .build();
-            httpClient = HttpClient.create().secure(t -> t.sslContext(sslContext));
+
+            // Configure HttpClient to use the insecure SslContext AND disable hostname verification
+            httpClient = HttpClient.create()
+                    .secure(sslProviderBuilder -> sslProviderBuilder
+                            .sslContext(sslContext)
+                            .handlerConfigurator(sslHandler -> {
+                                SSLEngine sslEngine = sslHandler.engine();
+                                SSLParameters sslParameters = sslEngine.getSSLParameters();
+                                // Setting algorithm to null disables endpoint identification (hostname verification)
+                                sslParameters.setEndpointIdentificationAlgorithm(null);
+                                sslEngine.setSSLParameters(sslParameters);
+                            }));
         } else {
-            httpClient = HttpClient.create(); // Default HttpClient with SSL validation
+            httpClient = HttpClient.create(); // Default HttpClient with SSL validation and hostname verification
         }
 
         return WebClient.builder()
