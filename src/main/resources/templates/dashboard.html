@@ -17,19 +17,26 @@
         .progress-bar { height: 100%; text-align: center; line-height: 1rem; color: white; font-size: 0.75rem;}
         .progress-bar-success { background-color: #22c55e; } /* green-500 */
         .progress-bar-failure { background-color: #ef4444; } /* red-500 */
+        .history-link { margin-top: 1rem; display: inline-block; background-color: #60a5fa; color:white; padding: 0.5rem 1rem; border-radius:0.375rem; text-decoration: none; }
+        .history-link:hover { background-color: #3b82f6; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 p-4 md:p-8">
 
 <div class="max-w-7xl mx-auto">
-    <header class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">Load Tester Dashboard</h1>
-        <p class="text-gray-600">Control and monitor your load tests in real-time.</p>
+    <header class="mb-8 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Load Tester Dashboard</h1>
+            <p class="text-gray-600">Control and monitor your load tests in real-time.</p>
+        </div>
+        <div>
+            <a href="/history" class="history-link">View Test History</a> <!-- Placeholder link -->
+        </div>
     </header>
 
     <div class="bg-white p-6 rounded-lg shadow-md mb-8">
         <h2 class="text-xl font-semibold mb-4">Test Control</h2>
-        <div class="flex space-x-4 items-center">
+        <div class="flex space-x-4 items-center mb-2">
             <button id="startButton"
                     class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-150 ease-in-out disabled:opacity-50">
                 Start Test
@@ -43,13 +50,15 @@
                 <span id="testStatusBadge" class="status-badge">Initializing...</span>
             </div>
         </div>
+        <div class="text-sm text-gray-500">
+            Current Run ID: <span id="currentRunIdLabel" class="font-mono">N/A</span>
+        </div>
         <div id="messageArea" class="mt-4 text-sm text-gray-700"></div>
     </div>
 
     <div class="bg-white p-6 rounded-lg shadow-md">
         <h2 class="text-xl font-semibold mb-4">Live Metrics</h2>
         <div id="metricsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Metrics will be dynamically inserted here -->
             <p id="noMetricsMessage" class="text-gray-500 col-span-full">
                 Metrics will appear here once the test is running or has completed a cycle.
             </p>
@@ -64,6 +73,7 @@
     const metricsContainer = document.getElementById('metricsContainer');
     const messageArea = document.getElementById('messageArea');
     const noMetricsMessage = document.getElementById('noMetricsMessage');
+    const currentRunIdLabel = document.getElementById('currentRunIdLabel');
 
     let statusInterval;
     let metricsInterval;
@@ -71,20 +81,20 @@
     async function updateTestRunningStatus() {
         try {
             const response = await fetch('/api/loadtest/isrunning');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             if (data.running) {
                 testStatusBadge.textContent = 'Running';
                 testStatusBadge.className = 'status-badge status-running';
                 startButton.disabled = true;
                 stopButton.disabled = false;
+                currentRunIdLabel.textContent = data.currentRunId || 'N/A';
             } else {
                 testStatusBadge.textContent = 'Stopped';
                 testStatusBadge.className = 'status-badge status-stopped';
                 startButton.disabled = false;
                 stopButton.disabled = true;
+                currentRunIdLabel.textContent = 'N/A';
             }
         } catch (error) {
             console.error('Error fetching running status:', error);
@@ -97,9 +107,7 @@
     async function fetchMetrics() {
         try {
             const response = await fetch('/api/loadtest/status');
-             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const metrics = await response.json();
             renderMetrics(metrics);
         } catch (error) {
@@ -110,22 +118,20 @@
     }
 
     function renderMetrics(targets) {
-        metricsContainer.innerHTML = ''; // Clear previous metrics
+        metricsContainer.innerHTML = '';
         if (!targets || targets.length === 0) {
             if (noMetricsMessage) {
                 metricsContainer.appendChild(noMetricsMessage);
+                noMetricsMessage.style.display = 'block';
                 noMetricsMessage.textContent = 'No metrics data available yet. Start the test or wait for data.';
             }
             return;
         }
-
         if (noMetricsMessage) noMetricsMessage.style.display = 'none';
-
 
         targets.forEach(target => {
             const card = document.createElement('div');
             card.className = 'metric-card shadow-lg';
-
             const totalCompleted = target.successfulRequests + target.failedRequests;
             const successPercentage = totalCompleted > 0 ? (target.successfulRequests / totalCompleted) * 100 : 0;
             const failurePercentage = totalCompleted > 0 ? (target.failedRequests / totalCompleted) * 100 : 0;
@@ -146,17 +152,11 @@
                         <strong>Latency (ms):</strong> Avg: ${formatNumber(target.latencyData.avg, 2)}, Max: ${formatNumber(target.latencyData.max, 2)}, Count: ${formatNumber(target.latencyData.count)}
                     </div>
                 ` : '<p class="text-sm text-gray-500 mb-3">Latency: N/A</p>'}
-
                 <div class="mb-1 text-xs font-medium">Success/Failure Ratio (${formatNumber(totalCompleted)} completed):</div>
                 <div class="progress-bar-container mb-3">
-                    <div class="progress-bar progress-bar-success" style="width: ${successPercentage.toFixed(1)}%;" title="Success: ${successPercentage.toFixed(1)}%">
-                        ${successPercentage >= 10 ? successPercentage.toFixed(1) + '%' : ''}
-                    </div>
-                    <div class="progress-bar progress-bar-failure" style="width: ${failurePercentage.toFixed(1)}%;" title="Failure: ${failurePercentage.toFixed(1)}%">
-                        ${failurePercentage >= 10 ? failurePercentage.toFixed(1) + '%' : ''}
-                    </div>
+                    <div class="progress-bar progress-bar-success" style="width: ${successPercentage.toFixed(1)}%;" title="Success: ${successPercentage.toFixed(1)}%">${successPercentage >= 10 ? successPercentage.toFixed(1) + '%' : ''}</div>
+                    <div class="progress-bar progress-bar-failure" style="width: ${failurePercentage.toFixed(1)}%;" title="Failure: ${failurePercentage.toFixed(1)}%">${failurePercentage >= 10 ? failurePercentage.toFixed(1) + '%' : ''}</div>
                 </div>
-
                 <details class="text-sm">
                     <summary class="cursor-pointer text-blue-600 hover:underline">Status Codes</summary>
                     <ul class="mt-2 list-disc list-inside pl-2">
@@ -170,41 +170,29 @@
 
     function formatNumber(num, decimalPlaces = 0) {
         if (num === null || num === undefined) return 'N/A';
-        return Number(num).toLocaleString(undefined, {
-            minimumFractionDigits: decimalPlaces,
-            maximumFractionDigits: decimalPlaces
-        });
+        return Number(num).toLocaleString(undefined, { minimumFractionDigits: decimalPlaces, maximumFractionDigits: decimalPlaces });
     }
 
     function showMessage(text, type = 'info') {
         messageArea.textContent = text;
-        messageArea.className = 'mt-4 text-sm p-3 rounded-md';
-        if (type === 'error') {
-            messageArea.classList.add('bg-red-100', 'text-red-700');
-        } else if (type === 'success') {
-            messageArea.classList.add('bg-green-100', 'text-green-700');
-        } else {
-            messageArea.classList.add('bg-blue-100', 'text-blue-700');
-        }
-        // Auto-clear message after some time
-        setTimeout(() => {
-            messageArea.textContent = '';
-            messageArea.className = 'mt-4 text-sm';
-        }, 5000);
+        messageArea.className = 'mt-4 text-sm p-3 rounded-md transition-opacity duration-300 opacity-100';
+        if (type === 'error') messageArea.classList.add('bg-red-100', 'text-red-700');
+        else if (type === 'success') messageArea.classList.add('bg-green-100', 'text-green-700');
+        else messageArea.classList.add('bg-blue-100', 'text-blue-700');
+        setTimeout(() => { messageArea.classList.remove('opacity-100'); messageArea.classList.add('opacity-0');}, 4700);
+         setTimeout(() => { messageArea.textContent = ''; messageArea.className = 'mt-4 text-sm';}, 5000);
     }
-
 
     startButton.addEventListener('click', async () => {
         showMessage('Starting test...', 'info');
         try {
             const response = await fetch('/api/loadtest/start', { method: 'POST' });
             const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.message || `HTTP error! status: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
             showMessage(data.message || 'Test started successfully.', 'success');
-            await updateTestRunningStatus(); // Update button states immediately
-            fetchMetrics(); // Fetch initial metrics
+            if(data.runId) currentRunIdLabel.textContent = data.runId;
+            await updateTestRunningStatus();
+            fetchMetrics();
         } catch (error) {
             console.error('Error starting test:', error);
             showMessage(`Error starting test: ${error.message}`, 'error');
@@ -217,11 +205,9 @@
         try {
             const response = await fetch('/api/loadtest/stop', { method: 'POST' });
             const data = await response.json();
-             if (!response.ok) {
-                throw new Error(data.message || `HTTP error! status: ${response.status}`);
-            }
+             if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
             showMessage(data.message || 'Test stopped successfully.', 'success');
-            await updateTestRunningStatus(); // Update button states immediately
+            await updateTestRunningStatus();
         } catch (error) {
             console.error('Error stopping test:', error);
             showMessage(`Error stopping test: ${error.message}`, 'error');
@@ -229,23 +215,17 @@
         }
     });
 
-    // Initial status check and setup polling
     document.addEventListener('DOMContentLoaded', () => {
         updateTestRunningStatus();
-        fetchMetrics(); // Fetch initial metrics on load
-
-        // Poll for running status and metrics
-        // Adjust intervals as needed
-        statusInterval = setInterval(updateTestRunningStatus, 3000); // Check running status every 3 seconds
-        metricsInterval = setInterval(fetchMetrics, 5000); // Refresh metrics every 5 seconds
+        fetchMetrics();
+        statusInterval = setInterval(updateTestRunningStatus, 3000);
+        metricsInterval = setInterval(fetchMetrics, 5000);
     });
 
-    // Clean up intervals when the page is unloaded (optional, good practice)
     window.addEventListener('beforeunload', () => {
         if (statusInterval) clearInterval(statusInterval);
         if (metricsInterval) clearInterval(metricsInterval);
     });
-
 </script>
 </body>
 </html>

@@ -9,12 +9,13 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.7.8</version>
+        <version>2.7.8</version> <!-- Consider updating to a more recent Spring Boot version if feasible -->
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <properties>
         <java.version>17</java.version>
         <ognl.version>3.1.26</ognl.version> <!-- Specify OGNL version -->
+        <commons-csv.version>1.10.0</commons-csv.version> <!-- Apache Commons CSV version -->
     </properties>
 
     <dependencies>
@@ -28,7 +29,7 @@
         <dependency>
             <groupId>com.github.vladimir-bukhtoyarov</groupId>
             <artifactId>bucket4j-core</artifactId>
-            <version>7.6.0</version>
+            <version>7.6.0</version> <!-- Consider checking for latest versions -->
         </dependency>
 
         <!-- Enable @ConfigurationProperties binding -->
@@ -46,20 +47,20 @@
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
-            <version>1.14.4</version>
+            <!-- Version managed by Spring Boot parent -->
         </dependency>
 
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
-            <version>1.14.4</version>
+            <!-- Version managed by Spring Boot parent -->
         </dependency>
 
-        <!-- https://mvnrepository.com/artifact/javax.validation/validation-api -->
+        <!-- Validation API (JSR 380) -->
         <dependency>
             <groupId>javax.validation</groupId>
             <artifactId>validation-api</artifactId>
-            <version>2.0.0.Final</version>
+            <!-- Version managed by Spring Boot parent -->
         </dependency>
 
         <!-- Spring Boot Starter for Validation (includes Hibernate Validator) -->
@@ -81,6 +82,16 @@
             <artifactId>ognl</artifactId>
             <version>${ognl.version}</version>
         </dependency>
+
+        <!-- Apache Commons CSV for CSV file generation -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>${commons-csv.version}</version>
+        </dependency>
+
+        <!-- Jackson for JSON processing (already included with spring-boot-starter-web/webflux) -->
+        <!-- No explicit dependency needed unless you need a specific version not managed by Spring Boot -->
 
     </dependencies>
 

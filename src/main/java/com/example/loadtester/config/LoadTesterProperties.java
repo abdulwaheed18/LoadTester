@@ -89,14 +89,18 @@ public class LoadTesterProperties {
     public static class Reporting {
         private Periodic periodic = new Periodic();
         private Shutdown shutdown = new Shutdown();
-        private Html html = new Html(); // Added HTML reporting config
+        private Html html = new Html();
+        private History history = new History(); // Added History config
 
         public Periodic getPeriodic() { return periodic; }
         public void setPeriodic(Periodic periodic) { this.periodic = periodic; }
         public Shutdown getShutdown() { return shutdown; }
         public void setShutdown(Shutdown shutdown) { this.shutdown = shutdown; }
-        public Html getHtml() { return html; } // Getter for HTML config
-        public void setHtml(Html html) { this.html = html; } // Setter for HTML config
+        public Html getHtml() { return html; }
+        public void setHtml(Html html) { this.html = html; }
+        public History getHistory() { return history; } // Getter for History config
+        public void setHistory(History history) { this.history = history; } // Setter for History config
+
 
         public static class Periodic {
             private boolean enabled = true;
@@ -115,15 +119,27 @@ public class LoadTesterProperties {
             public void setEnabled(boolean enabled) { this.enabled = enabled; }
         }
 
-        public static class Html { // New inner class for HTML report settings
+        public static class Html {
             private boolean enabled = true;
-            private String filePath = "./loadtest-summary-report.html"; // Default file path
+            private String filePath = "./reports/html/loadtest-summary-report.html"; // Default, path adjusted for history
 
             public boolean isEnabled() { return enabled; }
             public void setEnabled(boolean enabled) { this.enabled = enabled; }
             public String getFilePath() { return filePath; }
             public void setFilePath(String filePath) { this.filePath = filePath; }
         }
+
+        public static class History { // New inner class for History settings
+            private String directory = "./reports/history"; // Default directory for storing all historical run data
+            private boolean saveJson = true; // Enable saving JSON reports by default
+            private boolean saveCsv = true;  // Enable saving CSV reports by default
+
+            public String getDirectory() { return directory; }
+            public void setDirectory(String directory) { this.directory = directory; }
+            public boolean isSaveJson() { return saveJson; }
+            public void setSaveJson(boolean saveJson) { this.saveJson = saveJson; }
+            public boolean isSaveCsv() { return saveCsv; }
+            public void setSaveCsv(boolean saveCsv) { this.saveCsv = saveCsv; }
+        }
     }
 }
-    
