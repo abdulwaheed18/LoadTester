@@ -1,8 +1,9 @@
 package com.example.loadtester.controller;
 
+import com.example.loadtester.config.LoadTesterProperties; // Added import
 import com.example.loadtester.service.LoadEmitterService;
 import com.example.loadtester.service.SummaryReportingService;
-import com.example.loadtester.service.TestHistoryService; // New service for history
+import com.example.loadtester.service.TestHistoryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Controller
 public class LoadTestController {
@@ -36,15 +38,18 @@ public class LoadTestController {
 
     private final LoadEmitterService loadEmitterService;
     private final SummaryReportingService summaryReportingService;
-    private final TestHistoryService testHistoryService; // Inject TestHistoryService
+    private final TestHistoryService testHistoryService;
+    private final LoadTesterProperties loadTesterProperties; // Added for config endpoint
 
     @Autowired
     public LoadTestController(LoadEmitterService loadEmitterService,
                               SummaryReportingService summaryReportingService,
-                              TestHistoryService testHistoryService) {
+                              TestHistoryService testHistoryService,
+                              LoadTesterProperties loadTesterProperties) { // Injected LoadTesterProperties
         this.loadEmitterService = loadEmitterService;
         this.summaryReportingService = summaryReportingService;
         this.testHistoryService = testHistoryService;
+        this.loadTesterProperties = loadTesterProperties; // Initialize
     }
 
     @GetMapping("/")
@@ -55,17 +60,54 @@ public class LoadTestController {
         return "dashboard";
     }
 
-    /**
-     * Serves the test history page.
-     * @param model Model for Thymeleaf.
-     * @return The name of the history HTML template.
-     */
     @GetMapping("/history")
     public String historyPage(Model model) {
         logger.info("Serving test history page.");
-        // Model attributes can be added here if needed for the history page itself,
-        // but most data will be loaded via JavaScript calling the API.
-        return "history"; // This refers to src/main/resources/templates/history.html
+        return "history";
+    }
+
+    /**
+     * API endpoint to get the current load test configuration.
+     * @return A map containing relevant configuration details.
+     */
+    @GetMapping(value = "/api/loadtest/config", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> getLoadTestConfig() {
+        try {
+            Map<String, Object> configMap = new HashMap<>();
+            if (loadTesterProperties != null) {
+                // Expose only necessary and safe-to-display properties
+                if (loadTesterProperties.getTargets() != null) {
+                    configMap.put("targets", loadTesterProperties.getTargets().stream()
+                            .map(target -> {
+                                Map<String, Object> targetInfo = new HashMap<>();
+                                targetInfo.put("name", target.getName());
+                                targetInfo.put("url", target.getUrl());
+                                targetInfo.put("method", target.getMethod());
+                                targetInfo.put("desiredTps", target.getDesiredTps());
+                                targetInfo.put("throttleIntervalMs", target.getThrottleIntervalMs());
+                                // Avoid exposing payloadPath directly if it contains sensitive info or is too verbose
+                                // targetInfo.put("payloadPath", target.getPayloadPath());
+                                targetInfo.put("hasPayload", target.getPayloadPath() != null && !target.getPayloadPath().isEmpty());
+                                return targetInfo;
+                            }).collect(Collectors.toList()));
+                }
+                configMap.put("runDurationMinutesConfigured", loadTesterProperties.getRunDurationMinutes());
+                if (loadTesterProperties.getReporting() != null && loadTesterProperties.getReporting().getHistory() != null) {
+                    configMap.put("historyDirectory", loadTesterProperties.getReporting().getHistory().getDirectory());
+                }
+                if (loadTesterProperties.getReporting() != null && loadTesterProperties.getReporting().getPeriodic() != null) {
+                    configMap.put("periodicReportingEnabled", loadTesterProperties.getReporting().getPeriodic().isEnabled());
+                    configMap.put("periodicReportIntervalMs", loadTesterProperties.getReporting().getPeriodic().getSummaryIntervalMs());
+                }
+            } else {
+                configMap.put("error", "LoadTesterProperties not available.");
+            }
+            return ResponseEntity.ok(configMap);
+        } catch (Exception e) {
+            logger.error("Error retrieving load test configuration", e);
+            return ResponseEntity.status(500).body(Collections.singletonMap("error", "Could not retrieve configuration: " + e.getMessage()));
+        }
     }
 
 
@@ -81,12 +123,11 @@ public class LoadTestController {
                 logger.warn("Attempted to start load test while it was already running.");
                 return ResponseEntity.status(409).body(response); // 409 Conflict
             }
-            // Generate a unique run ID: timestamp + UUID part for uniqueness
             String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
             String uniquePart = UUID.randomUUID().toString().substring(0, 8);
             String runId = "run_" + timestamp + "_" + uniquePart;
 
-            loadEmitterService.startEmitters(runId); // Pass runId
+            loadEmitterService.startEmitters(runId);
             response.put("message", "Load test started successfully with run ID: " + runId);
             response.put("runId", runId);
             return ResponseEntity.ok(response);
@@ -111,12 +152,11 @@ public class LoadTestController {
             }
             loadEmitterService.stopEmitters();
 
-            // Generate final report for this specific run if reporting is enabled
             if (currentRunId != null && summaryReportingService.getProperties().getReporting().getShutdown().isEnabled()) {
                 logger.info("Generating final report for manually stopped run ID: {}", currentRunId);
                 summaryReportingService.generateAndLogSummaryReport(currentRunId);
             }
-            loadEmitterService.finalizeRunSession(); // Clear the runId context in emitter service
+            loadEmitterService.finalizeRunSession();
 
             response.put("message", "Load test (run ID: " + currentRunId + ") stopped successfully.");
             return ResponseEntity.ok(response);
@@ -149,8 +189,6 @@ public class LoadTestController {
         return ResponseEntity.ok(response);
     }
 
-    // --- Endpoints for History and Export ---
-
     @GetMapping(value = "/api/loadtest/history", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public ResponseEntity<List<TestHistoryService.TestRunSummary>> getTestHistory() {
@@ -167,14 +205,14 @@ public class LoadTestController {
     public ResponseEntity<List<SummaryReportingService.TargetReportData>> getTestRunDetails(@PathVariable String runId) {
         try {
             List<SummaryReportingService.TargetReportData> details = testHistoryService.getTestRunDetails(runId);
-            if (details == null || details.isEmpty()) { // Check if details could be null
+            if (details == null || details.isEmpty()) {
                 logger.warn("No details found or error occurred for run ID: {}", runId);
                 return ResponseEntity.notFound().build();
             }
             return ResponseEntity.ok(details);
-        } catch (IOException e) { // Catch specific IOException from getTestRunDetails
+        } catch (IOException e) {
             logger.error("IOException fetching details for run ID: {}", runId, e);
-            return ResponseEntity.status(500).body(Collections.emptyList()); // Or build appropriate error response
+            return ResponseEntity.status(500).body(Collections.emptyList());
         }
         catch (Exception e) {
             logger.error("Generic error fetching details for run ID: {}", runId, e);
@@ -189,10 +227,7 @@ public class LoadTestController {
         try {
             File fileToExport = null;
             String contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
-            // Filename for download should be URL encoded or sanitized if runId can have special chars.
-            // For simplicity, direct usage here.
             String filename = runId.replaceAll("[^a-zA-Z0-9_.-]", "_") + "." + format;
-
 
             if ("json".equalsIgnoreCase(format)) {
                 fileToExport = testHistoryService.getTestRunJsonFile(runId);
@@ -215,7 +250,7 @@ public class LoadTestController {
 
             InputStreamResource resource = new InputStreamResource(new FileInputStream(fileToExport));
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=\"" + filename + "\"") // Added quotes for filename
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=\"" + filename + "\"")
                     .contentType(MediaType.parseMediaType(contentType))
                     .contentLength(fileToExport.length())
                     .body(resource);
