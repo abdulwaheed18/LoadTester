@@ -3,8 +3,9 @@ spring:
     name: loadtester # Sets a global tag for metrics
 
 loadtester:
-  runDurationMinutes: 1 # Application will run for 5 minutes then shutdown. 0 or negative means run indefinitely.
-  targets:
+  runDurationMinutes: 1 # Application will run for X minutes then shutdown (if old logic is still present). 0 or negative means run indefinitely.
+  # For new UI-driven runs, this can be overridden by TestConfiguration.
+  targets: # This becomes the "default" configuration if no user-defined config is selected
     - name: API-1
       url: https://dummyjson.com/auth/login
       method: POST
@@ -23,34 +24,38 @@ loadtester:
       throttleIntervalMs: 3000 # e.g., 1 request every 2000ms max if desiredTps is high
   reporting:
     periodic:
-      enabled: true # Set to true to enable periodic summary reports
-      summaryIntervalMs: 60000 # Log summary report every 60 seconds (60000 ms)
+      enabled: true
+      summaryIntervalMs: 60000
     shutdown:
-      enabled: true # Set to true to enable summary report on application shutdown
-    html:
-      enabled: true # Enable HTML report generation on shutdown
-      filePath: "./loadtest-summary-report.html" # Path to save the HTML report
+      enabled: true
+    html: # This setting might become part of TestHistoryService logic for saving reports
+      enabled: true
+      # filePath: "./loadtest-summary-report.html" # filePath for shutdown HTML report (now managed by history service per run)
+    history:
+      directory: "./reports/history" # Base directory for all historical run data (HTML, JSON, CSV per runId)
+      saveJson: true
+      saveCsv: true
+
+  configurations: # New section for user-defined configurations
+    directory: "./test_configs" # Directory to store user-defined JSON test configurations
 
 
 management:
   endpoints:
     web:
       exposure:
-        include: "health,info,prometheus,metrics" # Expose these actuator endpoints
+        include: "health,info,prometheus,metrics"
   metrics:
-    tags: # Global tags applied to all metrics
+    tags:
       application: ${spring.application.name}
     distribution:
       percentiles-histogram:
-        # Enable histogram data for latency metrics to allow server-side percentile calculation (e.g., in Prometheus)
         http.server.requests: true
-        loadtester.request.latency: true # Custom timer name
+        loadtester.request.latency: true
       sla:
-        # Define Service Level Objectives for latency (optional, for specific timers)
-        loadtester.request.latency: 100ms, 250ms, 500ms, 1s # Example SLAs for latency timer
+        loadtester.request.latency: 100ms, 250ms, 500ms, 1s
 
-# Logging configuration (optional, for more detailed output)
 logging:
   level:
-    com.example.loadtester: DEBUG # Set to INFO for less verbose output in production
-    io.netty.util.internal.PlatformDependent: WARN # Quiets down Netty noise on startup
+    com.example.loadtester: DEBUG
+    io.netty.util.internal.PlatformDependent: WARN

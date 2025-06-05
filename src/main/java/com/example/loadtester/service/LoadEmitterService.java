@@ -1,3 +1,4 @@
+// src/main/java/com/example/loadtester/service/LoadEmitterService.java
 package com.example.loadtester.service;
 
 import com.example.loadtester.config.LoadTesterProperties;
@@ -9,7 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy; // Import @Lazy
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -21,7 +22,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,10 +33,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Service
-public class LoadEmitterService implements DisposableBean { // Implement DisposableBean to shutdown executor
+public class LoadEmitterService implements DisposableBean {
     private static final Logger logger = LoggerFactory.getLogger(LoadEmitterService.class);
 
-    private final LoadTesterProperties props;
     private final RateLimiterService rateLimiterService;
     private final PayloadLoader payloadLoader;
     private final WebClient webClient;
@@ -46,23 +45,21 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
     private final Map<String, Disposable> activeEmitters = new ConcurrentHashMap<>();
     private final Map<String, String> payloadCache = new ConcurrentHashMap<>();
     private final AtomicBoolean emittersRunning = new AtomicBoolean(false);
-    private final AtomicReference<String> currentRunId = new AtomicReference<>(null); // To store the current run ID
+    private final AtomicReference<String> currentRunId = new AtomicReference<>(null);
+    private final AtomicReference<String> currentConfigName = new AtomicReference<>("N/A");
+    private final AtomicReference<LoadTesterProperties> activeRunProperties = new AtomicReference<>();
 
-    // Scheduler for timed stop of emitters
     private final ScheduledExecutorService timedStopScheduler;
     private ScheduledFuture<?> timedStopFuture;
 
-
     @Autowired
     public LoadEmitterService(
-            LoadTesterProperties props,
             RateLimiterService rateLimiterService,
             PayloadLoader payloadLoader,
             WebClient.Builder webClientBuilder,
             MeterRegistry meterRegistry,
             @Lazy SummaryReportingService summaryReportingService
     ) {
-        this.props = props;
         this.rateLimiterService = rateLimiterService;
         this.payloadLoader = payloadLoader;
         this.webClient = webClientBuilder.build();
@@ -77,11 +74,12 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
     }
 
     /**
-     * Starts the load generation emitters for all configured targets.
-     * If runDurationMinutes is configured, schedules a task to stop emitters after that duration.
+     * Starts the load generation emitters using the provided LoadTesterProperties.
      * @param runId The unique identifier for this load test run.
+     * @param propertiesToUse The configuration properties to use for this run.
+     * @param configName The display name of the configuration being used.
      */
-    public synchronized void startEmitters(String runId) { // runId parameter added
+    public synchronized void startEmitters(String runId, LoadTesterProperties propertiesToUse, String configName) {
         if (emittersRunning.get()) {
             logger.info("Load emitters are already running under run ID: {}. Cannot start a new session.", this.currentRunId.get());
             return;
@@ -90,21 +88,27 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
             logger.error("Run ID cannot be null or empty. Aborting startEmitters.");
             return;
         }
-        this.currentRunId.set(runId); // Set the current run ID for this session
-        logger.info("Attempting to start load emitters for run ID: {}", runId);
+        if (propertiesToUse == null) {
+            logger.error("LoadTesterProperties cannot be null. Aborting startEmitters for run ID: {}", runId);
+            return;
+        }
+        this.currentRunId.set(runId);
+        this.activeRunProperties.set(propertiesToUse);
+        this.currentConfigName.set(configName != null ? configName : "Custom/Unknown");
 
+        logger.info("Attempting to start load emitters for run ID: {} using configuration: {}", runId, this.currentConfigName.get());
 
-        List<LoadTesterProperties.TargetEndpoint> targets = props.getTargets();
+        List<LoadTesterProperties.TargetEndpoint> targets = propertiesToUse.getTargets();
         if (targets == null || targets.isEmpty()) {
             logger.warn("No targets configured for run ID: {}. Cannot start emitters.", runId);
-            this.currentRunId.set(null); // Clear runId as nothing will start
+            finalizeRunSessionState(); // Clear run state as nothing will start
             return;
         }
 
         if (timedStopFuture != null && !timedStopFuture.isDone()) {
             timedStopFuture.cancel(false);
             logger.debug("Cancelled previous timed stop task as new session (run ID: {}) is starting.", runId);
-            timedStopFuture = null;
+            timedStopFuture = null; // Reset future
         }
 
         logger.info("Starting load emitters for {} targets for run ID: {}...", targets.size(), runId);
@@ -131,7 +135,7 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
                 logger.error("Unsupported HTTP method '{}' for target '{}' (run ID: {}). Skipping.", endpoint.getMethod(), targetName, runId);
                 continue;
             }
-            if (endpoint.getPayloadPath() != null &&
+            if (endpoint.getPayloadPath() != null && !endpoint.getPayloadPath().trim().isEmpty() &&
                     (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.PATCH)) {
                 try {
                     String body = payloadLoader.loadPayload(endpoint.getPayloadPath());
@@ -143,21 +147,31 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
                 }
             }
 
+            // Ensure currentRunId.get() is not null before using it in tags
+            String currentRunIdValue = this.currentRunId.get();
+            if (currentRunIdValue == null) {
+                logger.error("Critical error: currentRunId is null during emitter setup for target {}. Aborting this target.", targetName);
+                continue; // Skip this target if runId is not set.
+            }
+
+
             Gauge.builder("loadtester.tps.desired", () -> endpoint.getDesiredTps())
                     .description("Desired transactions per second for the target")
                     .tag("target", targetName)
+                    .tag("runId", currentRunIdValue)
                     .register(meterRegistry);
 
             long intervalMs = (desiredTps <= 0) ? 1L : Math.max(1L, 1000L / desiredTps);
 
             Flux<Long> flux = Flux.interval(Duration.ofMillis(intervalMs))
                     .onBackpressureDrop(droppedTick -> {
-                        logger.warn("[{}] (Run ID: {}) Backpressure applied, request tick {} dropped.", targetName, this.currentRunId.get(), droppedTick);
-                        meterRegistry.counter("loadtester.requests.backpressure.dropped", "target", targetName).increment();
+                        logger.warn("[{}] (Run ID: {}) Backpressure applied, request tick {} dropped.", targetName, currentRunIdValue, droppedTick);
+                        meterRegistry.counter("loadtester.requests.backpressure.dropped", "target", targetName, "runId", currentRunIdValue).increment();
                     });
 
             Disposable emitterSubscription = flux.subscribe(tick -> {
-                if (!emittersRunning.get()) {
+                String activeRunId = this.currentRunId.get(); // Re-fetch in case it changed, though unlikely in this path
+                if (!emittersRunning.get() || activeRunId == null) { // Check global flag and ensure runId is still set
                     Disposable d = activeEmitters.get(targetName);
                     if(d != null && !d.isDisposed()) {
                         d.dispose();
@@ -165,23 +179,23 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
                     return;
                 }
                 if (!rateLimiterService.tryConsume(targetName)) {
-                    logger.trace("[{}] (Run ID: {}) tick={}, rate-limited. Skipping", targetName, this.currentRunId.get(), tick);
-                    meterRegistry.counter("loadtester.requests.throttled", "target", targetName).increment();
+                    logger.trace("[{}] (Run ID: {}) tick={}, rate-limited. Skipping", targetName, activeRunId, tick);
+                    meterRegistry.counter("loadtester.requests.throttled", "target", targetName, "runId", activeRunId).increment();
                     return;
                 }
 
-                meterRegistry.counter("loadtester.requests.initiated", "target", targetName ).increment();
+                meterRegistry.counter("loadtester.requests.initiated", "target", targetName, "runId", activeRunId).increment();
                 Timer.Sample requestTimerSample = Timer.start(meterRegistry);
 
                 sendRequest(endpoint)
                         .doOnSuccess(status -> {
                             requestTimerSample.stop(meterRegistry.timer("loadtester.request.latency",
-                                    Tags.of("target", targetName, "http_status", String.valueOf(status), "outcome", "success" )));
+                                    Tags.of("target", targetName, "http_status", String.valueOf(status), "outcome", "success", "runId", activeRunId )));
                             meterRegistry.counter("loadtester.requests.completed",
-                                    Tags.of("target", targetName, "http_status", String.valueOf(status), "outcome", "success" )).increment();
+                                    Tags.of("target", targetName, "http_status", String.valueOf(status), "outcome", "success", "runId", activeRunId)).increment();
                             meterRegistry.counter("loadtester.requests.by_status",
-                                    Tags.of("target", targetName, "http_status", String.valueOf(status) )).increment();
-                            logger.trace("[{}] (Run ID: {}) request #{} succeeded with status {}", targetName, this.currentRunId.get(), tick, status);
+                                    Tags.of("target", targetName, "http_status", String.valueOf(status), "runId", activeRunId )).increment();
+                            logger.trace("[{}] (Run ID: {}) request #{} succeeded with status {}", targetName, activeRunId, tick, status);
                         })
                         .doOnError(error -> {
                             String httpStatusStr = "CLIENT_ERROR";
@@ -191,24 +205,23 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
                                 WebClientResponseException wcre = (WebClientResponseException) error;
                                 httpStatusStr = String.valueOf(wcre.getRawStatusCode());
                                 meterRegistry.counter("loadtester.requests.by_status",
-                                        Tags.of("target", targetName, "http_status", httpStatusStr )).increment();
+                                        Tags.of("target", targetName, "http_status", httpStatusStr, "runId", activeRunId )).increment();
                             } else {
                                 meterRegistry.counter("loadtester.requests.by_status",
-                                        Tags.of("target", targetName, "http_status", "CLIENT_ERROR" )).increment();
+                                        Tags.of("target", targetName, "http_status", "CLIENT_ERROR", "runId", activeRunId )).increment();
                             }
 
                             requestTimerSample.stop(meterRegistry.timer("loadtester.request.latency",
-                                    Tags.of("target", targetName, "http_status", httpStatusStr, "outcome", "failure" )));
+                                    Tags.of("target", targetName, "http_status", httpStatusStr, "outcome", "failure", "runId", activeRunId )));
                             meterRegistry.counter("loadtester.requests.completed",
-                                    Tags.of("target", targetName, "http_status", httpStatusStr, "outcome", "failure", "error_type", errorType )).increment();
-                            logger.warn("[{}] (Run ID: {}) request #{} failed. Status: {}, Error Type: {}, Message: {}", targetName, this.currentRunId.get(), tick, httpStatusStr, errorType, error.getMessage());
+                                    Tags.of("target", targetName, "http_status", httpStatusStr, "outcome", "failure", "error_type", errorType, "runId", activeRunId)).increment();
+                            logger.warn("[{}] (Run ID: {}) request #{} failed. Status: {}, Error Type: {}, Message: {}", targetName, activeRunId, tick, httpStatusStr, errorType, error.getMessage());
                         })
                         .subscribe(
                                 status -> {},
                                 error -> {}
                         );
             });
-
             activeEmitters.put(targetName, emitterSubscription);
             logger.info("Started emitter for target [{}] for run ID: {}", targetName, runId);
         }
@@ -217,26 +230,26 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
             emittersRunning.set(true);
             logger.info("All configured load emitters started successfully for run ID: {}.", runId);
 
-            int runDurationMinutes = props.getRunDurationMinutes();
+            int runDurationMinutes = propertiesToUse.getRunDurationMinutes();
             if (runDurationMinutes > 0) {
                 logger.info("Load test session (run ID: {}) scheduled to run for {} minutes.", runId, runDurationMinutes);
-                final String capturedRunId = this.currentRunId.get(); // Capture for lambda
+                final String capturedRunId = this.currentRunId.get();
                 timedStopFuture = timedStopScheduler.schedule(() -> {
                     logger.info("Configured run duration of {} minutes reached for run ID: {}. Automatically stopping emitters.", runDurationMinutes, capturedRunId);
                     stopEmitters();
-                    if (props.getReporting().getShutdown().isEnabled()) { // Re-purpose shutdown report flag
+                    LoadTesterProperties currentProps = activeRunProperties.get(); // Get props for the run that just ended
+                    if (currentProps != null && currentProps.getReporting() != null && currentProps.getReporting().getShutdown().isEnabled()) {
                         logger.info("Generating summary report after timed session completion for run ID: {} (as reporting.shutdown.enabled is true).", capturedRunId);
-                        summaryReportingService.generateAndLogSummaryReport(capturedRunId); // Pass capturedRunId
+                        summaryReportingService.generateAndLogSummaryReport(capturedRunId);
                     }
+                    finalizeRunSessionState(); // Finalize state after report
                 }, runDurationMinutes, TimeUnit.MINUTES);
             } else {
                 logger.info("Load test session (run ID: {}) configured to run indefinitely.", runId);
             }
-
         } else {
             logger.warn("No emitters were started for run ID: {}.", runId);
-            emittersRunning.set(false);
-            this.currentRunId.set(null); // Clear runId if nothing started
+            finalizeRunSessionState(); // Clear run state if nothing started
         }
     }
 
@@ -259,14 +272,20 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
         if (payloadCache.containsKey(ep.getName()) &&
                 (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.PATCH)) {
             String body = payloadCache.get(ep.getName());
-            String contentType = (ep.getHeaders() != null && ep.getHeaders().get("Content-Type") != null)
-                    ? ep.getHeaders().get("Content-Type")
-                    : MediaType.APPLICATION_JSON_VALUE;
-            finalRequestSpec = requestSpec.contentType(MediaType.parseMediaType(contentType)).bodyValue(body);
-        } else if (ep.getPayloadPath() != null &&
+            String contentTypeHeader = ep.getHeaders() != null ? ep.getHeaders().get("Content-Type") : null;
+            MediaType mediaType = MediaType.APPLICATION_JSON; // Default
+            if (contentTypeHeader != null) {
+                try {
+                    mediaType = MediaType.parseMediaType(contentTypeHeader);
+                } catch (Exception e) {
+                    logger.warn("Invalid Content-Type header '{}' for target {}. Defaulting to application/json.", contentTypeHeader, ep.getName());
+                }
+            }
+            finalRequestSpec = requestSpec.contentType(mediaType).bodyValue(body);
+        } else if (ep.getPayloadPath() != null && !ep.getPayloadPath().trim().isEmpty() &&
                 (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.PATCH) &&
                 !payloadCache.containsKey(ep.getName())) {
-            logger.error("Payload for {} was specified but is not in cache for run ID {}. Request will likely fail or be sent without body.", ep.getName(), this.currentRunId.get());
+            logger.error("Payload for {} was specified but is not in cache for run ID {}. Request will be sent without body or may fail.", ep.getName(), this.currentRunId.get());
         }
 
         return ((WebClient.RequestHeadersSpec<?>) finalRequestSpec)
@@ -277,7 +296,7 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
                             .flatMap(bodyContent -> {
                                 if (response.statusCode().isError()) {
                                     String errorBodySnippet = bodyContent.length() > 200 ? bodyContent.substring(0, 200) + "..." : bodyContent;
-                                    logger.warn("Target '{}' (Run ID: {}) request failed with HTTP {}. Response body snippet: {}", ep.getName(), this.currentRunId.get(), rawStatusCode, errorBodySnippet);
+                                    logger.debug("Target '{}' (Run ID: {}) request failed with HTTP {}. Response body snippet: {}", ep.getName(), this.currentRunId.get(), rawStatusCode, errorBodySnippet);
                                     return Mono.error(WebClientResponseException.create(
                                             rawStatusCode,
                                             HttpStatus.resolve(rawStatusCode) != null ? HttpStatus.resolve(rawStatusCode).getReasonPhrase() : "Unknown Status",
@@ -292,19 +311,20 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
     }
 
     public synchronized void stopEmitters() {
-        final String runIdForStop = this.currentRunId.get(); // Get current run ID for logging
+        final String runIdForStop = this.currentRunId.get();
         if (!emittersRunning.get() && activeEmitters.isEmpty() && (timedStopFuture == null || timedStopFuture.isDone())) {
             logger.info("Load emitters (for run ID: {}) are already stopped or were never started. No action taken.", runIdForStop);
             return;
         }
 
-        logger.info("Attempting to stop all active load emitters (run ID: {}, currently {} emitters)...", runIdForStop, activeEmitters.size());
+        logger.info("Attempting to stop all active load emitters (run ID: {}, using config: {}, currently {} emitters)...",
+                runIdForStop, this.currentConfigName.get(), activeEmitters.size());
         emittersRunning.set(false);
 
         if (timedStopFuture != null && !timedStopFuture.isDone()) {
             timedStopFuture.cancel(true);
             logger.info("Cancelled any pending scheduled timed stop of emitters for run ID: {}.", runIdForStop);
-            timedStopFuture = null;
+            timedStopFuture = null; // Reset future
         }
 
         activeEmitters.forEach((name, emitter) -> {
@@ -314,26 +334,38 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
             }
         });
         activeEmitters.clear();
-
         logger.info("All load emitters for run ID: {} have been commanded to stop.", runIdForStop);
+        // Note: finalizeRunSessionState() which clears currentRunId, activeRunProperties etc.
+        // should be called by the controller *after* any final report generation.
     }
-
 
     public String getCurrentRunId() {
         return this.currentRunId.get();
     }
+    public String getCurrentConfigName() { return this.currentConfigName.get(); }
+    public LoadTesterProperties getActiveRunProperties() { return this.activeRunProperties.get(); }
 
-    /**
-     * Call this method after a run is fully completed and reported to clear its context.
-     */
-    public synchronized void finalizeRunSession() {
+
+    // Renamed to avoid confusion with controller's finalizeRunSession
+    public synchronized void finalizeRunSessionState() {
         String oldRunId = this.currentRunId.getAndSet(null);
-        if (oldRunId != null) {
-            logger.info("Finalized session for run ID: {}", oldRunId);
+        this.activeRunProperties.set(null);
+        this.currentConfigName.set("N/A");
+        this.payloadCache.clear();
+        this.emittersRunning.set(false); // Ensure this is false
+        if (timedStopFuture != null && !timedStopFuture.isDone()){
+            timedStopFuture.cancel(true); // Ensure timed stop is also cancelled
+            timedStopFuture = null;
         }
-        if (emittersRunning.get() || !activeEmitters.isEmpty()) {
-            logger.warn("Finalizing run session, but emitters appear to be active. This might indicate an issue in the stop sequence.");
-            stopEmitters();
+        if (oldRunId != null) {
+            logger.info("Finalized session state for run ID: {}", oldRunId);
+        }
+        if (!activeEmitters.isEmpty()) { // Should be empty if stopEmitters worked
+            logger.warn("Finalizing run session state, but activeEmitters map is not empty. Clearing it now.");
+            activeEmitters.forEach((name, emitter) -> {
+                if (emitter != null && !emitter.isDisposed()) emitter.dispose();
+            });
+            activeEmitters.clear();
         }
     }
 
@@ -345,7 +377,13 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
     @Override
     public void destroy() throws Exception {
         logger.info("Shutting down LoadEmitterService due to application context destruction.");
-        stopEmitters();
+        if (emittersRunning.get()) { // If a test is somehow still marked as running
+            logger.warn("Emitters were marked as running during application destruction. Forcing stop and finalization.");
+            stopEmitters();
+            // A final report might be missed here if shutdown reporting relied on the normal flow.
+            // The @PreDestroy in SummaryReportingService should ideally handle its own final report.
+        }
+        finalizeRunSessionState(); // Ensure all state is cleared
 
         if (timedStopScheduler != null && !timedStopScheduler.isShutdown()) {
             logger.info("Shutting down the timedStopScheduler...");
@@ -354,9 +392,6 @@ public class LoadEmitterService implements DisposableBean { // Implement Disposa
                 if (!timedStopScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
                     logger.warn("TimedStopScheduler did not terminate in 5 seconds, forcing shutdown...");
                     timedStopScheduler.shutdownNow();
-                    if (!timedStopScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-                        logger.error("TimedStopScheduler did not terminate even after forced shutdown.");
-                    }
                 }
             } catch (InterruptedException ie) {
                 logger.error("Interrupted while waiting for TimedStopScheduler to terminate. Forcing shutdown.", ie);

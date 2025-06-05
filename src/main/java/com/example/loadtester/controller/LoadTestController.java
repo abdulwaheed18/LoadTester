@@ -1,33 +1,36 @@
+// src/main/java/com/example/loadtester/controller/LoadTestController.java
 package com.example.loadtester.controller;
 
-import com.example.loadtester.config.LoadTesterProperties; // Added import
+import com.example.loadtester.config.LoadTesterProperties;
+import com.example.loadtester.model.TestConfiguration;
 import com.example.loadtester.service.LoadEmitterService;
 import com.example.loadtester.service.SummaryReportingService;
+import com.example.loadtester.service.TestConfigurationService;
 import com.example.loadtester.service.TestHistoryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -39,17 +42,20 @@ public class LoadTestController {
     private final LoadEmitterService loadEmitterService;
     private final SummaryReportingService summaryReportingService;
     private final TestHistoryService testHistoryService;
-    private final LoadTesterProperties loadTesterProperties; // Added for config endpoint
+    private final LoadTesterProperties defaultLoadTesterProperties;
+    private final TestConfigurationService testConfigurationService;
 
     @Autowired
     public LoadTestController(LoadEmitterService loadEmitterService,
                               SummaryReportingService summaryReportingService,
                               TestHistoryService testHistoryService,
-                              LoadTesterProperties loadTesterProperties) { // Injected LoadTesterProperties
+                              LoadTesterProperties loadTesterProperties,
+                              TestConfigurationService testConfigurationService) {
         this.loadEmitterService = loadEmitterService;
         this.summaryReportingService = summaryReportingService;
         this.testHistoryService = testHistoryService;
-        this.loadTesterProperties = loadTesterProperties; // Initialize
+        this.defaultLoadTesterProperties = loadTesterProperties;
+        this.testConfigurationService = testConfigurationService;
     }
 
     @GetMapping("/")
@@ -66,19 +72,32 @@ public class LoadTestController {
         return "history";
     }
 
-    /**
-     * API endpoint to get the current load test configuration.
-     * @return A map containing relevant configuration details.
-     */
     @GetMapping(value = "/api/loadtest/config", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> getLoadTestConfig() {
+    public ResponseEntity<Map<String, Object>> getLoadTestConfig(@RequestParam(required = false) String configurationId) {
         try {
+            LoadTesterProperties effectiveProperties;
+            String configName = "Default (application.yml)";
+
+            if (configurationId != null && !configurationId.isEmpty()) {
+                Optional<TestConfiguration> userConfigOpt = testConfigurationService.getConfigurationById(configurationId);
+                if (userConfigOpt.isPresent()) {
+                    TestConfiguration userConfig = userConfigOpt.get();
+                    effectiveProperties = testConfigurationService.convertToLoadTesterProperties(userConfig, defaultLoadTesterProperties);
+                    configName = userConfig.getName();
+                } else {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Collections.singletonMap("error", "Configuration ID not found: " + configurationId));
+                }
+            } else {
+                effectiveProperties = defaultLoadTesterProperties;
+            }
+
             Map<String, Object> configMap = new HashMap<>();
-            if (loadTesterProperties != null) {
-                // Expose only necessary and safe-to-display properties
-                if (loadTesterProperties.getTargets() != null) {
-                    configMap.put("targets", loadTesterProperties.getTargets().stream()
+            configMap.put("activeConfigurationName", configName);
+
+            if (effectiveProperties != null) {
+                if (effectiveProperties.getTargets() != null) {
+                    configMap.put("targets", effectiveProperties.getTargets().stream()
                             .map(target -> {
                                 Map<String, Object> targetInfo = new HashMap<>();
                                 targetInfo.put("name", target.getName());
@@ -86,22 +105,20 @@ public class LoadTestController {
                                 targetInfo.put("method", target.getMethod());
                                 targetInfo.put("desiredTps", target.getDesiredTps());
                                 targetInfo.put("throttleIntervalMs", target.getThrottleIntervalMs());
-                                // Avoid exposing payloadPath directly if it contains sensitive info or is too verbose
-                                // targetInfo.put("payloadPath", target.getPayloadPath());
                                 targetInfo.put("hasPayload", target.getPayloadPath() != null && !target.getPayloadPath().isEmpty());
                                 return targetInfo;
                             }).collect(Collectors.toList()));
                 }
-                configMap.put("runDurationMinutesConfigured", loadTesterProperties.getRunDurationMinutes());
-                if (loadTesterProperties.getReporting() != null && loadTesterProperties.getReporting().getHistory() != null) {
-                    configMap.put("historyDirectory", loadTesterProperties.getReporting().getHistory().getDirectory());
+                configMap.put("runDurationMinutesConfigured", effectiveProperties.getRunDurationMinutes());
+                if (effectiveProperties.getReporting() != null && effectiveProperties.getReporting().getHistory() != null) {
+                    configMap.put("historyDirectory", effectiveProperties.getReporting().getHistory().getDirectory());
                 }
-                if (loadTesterProperties.getReporting() != null && loadTesterProperties.getReporting().getPeriodic() != null) {
-                    configMap.put("periodicReportingEnabled", loadTesterProperties.getReporting().getPeriodic().isEnabled());
-                    configMap.put("periodicReportIntervalMs", loadTesterProperties.getReporting().getPeriodic().getSummaryIntervalMs());
+                if (effectiveProperties.getReporting() != null && effectiveProperties.getReporting().getPeriodic() != null) {
+                    configMap.put("periodicReportingEnabled", effectiveProperties.getReporting().getPeriodic().isEnabled());
+                    configMap.put("periodicReportIntervalMs", effectiveProperties.getReporting().getPeriodic().getSummaryIntervalMs());
                 }
             } else {
-                configMap.put("error", "LoadTesterProperties not available.");
+                configMap.put("error", "LoadTesterProperties (effective) not available.");
             }
             return ResponseEntity.ok(configMap);
         } catch (Exception e) {
@@ -110,31 +127,121 @@ public class LoadTestController {
         }
     }
 
+    @PostMapping(value = "/api/loadtest/configurations", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<TestConfiguration> saveConfiguration(@RequestBody TestConfiguration config) {
+        try {
+            if (config.getId() == null || config.getId().isEmpty()) {
+                config.setId(UUID.randomUUID().toString());
+            }
+            TestConfiguration savedConfig = testConfigurationService.saveConfiguration(config);
+            return ResponseEntity.ok(savedConfig);
+        } catch (IOException e) {
+            logger.error("Error saving test configuration: " + (config != null ? config.getName() : "null"), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    @GetMapping(value = "/api/loadtest/configurations", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<List<TestConfiguration>> getAllConfigurations() {
+        try {
+            return ResponseEntity.ok(testConfigurationService.getAllConfigurations());
+        } catch (Exception e) {
+            logger.error("Error fetching all test configurations", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.emptyList());
+        }
+    }
+
+    @GetMapping(value = "/api/loadtest/configurations/{configId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<TestConfiguration> getConfigurationById(@PathVariable String configId) {
+        return testConfigurationService.getConfigurationById(configId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping(value = "/api/loadtest/configurations/{configId}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<TestConfiguration> updateConfiguration(@PathVariable String configId, @RequestBody TestConfiguration config) {
+        if (!testConfigurationService.getConfigurationById(configId).isPresent()) {
+            logger.warn("Attempted to update non-existent configuration ID: {}", configId);
+            return ResponseEntity.notFound().build();
+        }
+        config.setId(configId);
+        try {
+            TestConfiguration updatedConfig = testConfigurationService.saveConfiguration(config);
+            return ResponseEntity.ok(updatedConfig);
+        } catch (IOException e) {
+            logger.error("Error updating test configuration: " + config.getName(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    @DeleteMapping(value = "/api/loadtest/configurations/{configId}")
+    @ResponseBody
+    public ResponseEntity<Void> deleteConfiguration(@PathVariable String configId) {
+        if (!testConfigurationService.getConfigurationById(configId).isPresent()) {
+            logger.warn("Attempted to delete non-existent configuration ID: {}", configId);
+            return ResponseEntity.notFound().build();
+        }
+        if (testConfigurationService.deleteConfiguration(configId)) {
+            return ResponseEntity.ok().build();
+        } else {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
 
     @PostMapping("/api/loadtest/start")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> startLoadTest() {
-        logger.info("Received request to start load test.");
+    public ResponseEntity<Map<String, Object>> startLoadTest(@RequestParam(required = false) String configurationId) {
+        logger.info("Received request to start load test. Custom config ID: {}",
+                (configurationId == null || configurationId.isEmpty()) ? "None (using default)" : configurationId);
         Map<String, Object> response = new HashMap<>();
         try {
             if (loadEmitterService.areEmittersRunning()) {
                 response.put("message", "Load test is already running with run ID: " + loadEmitterService.getCurrentRunId());
                 response.put("runId", loadEmitterService.getCurrentRunId());
                 logger.warn("Attempted to start load test while it was already running.");
-                return ResponseEntity.status(409).body(response); // 409 Conflict
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
             }
+
+            LoadTesterProperties propertiesToUse;
+            String loadedConfigName;
+
+            if (configurationId != null && !configurationId.isEmpty()) {
+                Optional<TestConfiguration> userConfigOpt = testConfigurationService.getConfigurationById(configurationId);
+                if (userConfigOpt.isPresent()) {
+                    TestConfiguration userConfig = userConfigOpt.get();
+                    propertiesToUse = testConfigurationService.convertToLoadTesterProperties(userConfig, defaultLoadTesterProperties);
+                    loadedConfigName = userConfig.getName();
+                    logger.info("Starting test with user-defined configuration: {} (ID: {})", loadedConfigName, configurationId);
+                } else {
+                    response.put("message", "Configuration ID '" + configurationId + "' not found. Cannot start test.");
+                    logger.warn("Configuration ID {} not found.", configurationId);
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+                }
+            } else {
+                propertiesToUse = defaultLoadTesterProperties;
+                loadedConfigName = "Default (application.yml)";
+                logger.info("Starting test with default configuration from application.yml.");
+            }
+
             String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
             String uniquePart = UUID.randomUUID().toString().substring(0, 8);
             String runId = "run_" + timestamp + "_" + uniquePart;
 
-            loadEmitterService.startEmitters(runId);
-            response.put("message", "Load test started successfully with run ID: " + runId);
+            // *** FIX: Pass the loadedConfigName as the third argument ***
+            loadEmitterService.startEmitters(runId, propertiesToUse, loadedConfigName);
+
+            response.put("message", "Load test started successfully with run ID: " + runId + " using configuration: " + loadedConfigName);
             response.put("runId", runId);
+            response.put("configName", loadedConfigName);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("Error starting load test", e);
             response.put("message", "Error starting load test: " + e.getMessage());
-            return ResponseEntity.status(500).body(response);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 
@@ -148,22 +255,33 @@ public class LoadTestController {
             if (!loadEmitterService.areEmittersRunning()) {
                 response.put("message", "Load test is not currently running.");
                 logger.warn("Attempted to stop load test while it was not running.");
-                return ResponseEntity.status(409).body(response);
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
             }
             loadEmitterService.stopEmitters();
 
-            if (currentRunId != null && summaryReportingService.getProperties().getReporting().getShutdown().isEnabled()) {
+            LoadTesterProperties currentRunProps = loadEmitterService.getActiveRunProperties();
+            // Determine if shutdown report is enabled based on the properties active during the run,
+            // or fall back to default if for some reason activeRunProps is null.
+            boolean shutdownReportEnabled = defaultLoadTesterProperties.getReporting().getShutdown().isEnabled();
+            if (currentRunProps != null && currentRunProps.getReporting() != null && currentRunProps.getReporting().getShutdown() != null) {
+                shutdownReportEnabled = currentRunProps.getReporting().getShutdown().isEnabled();
+            } else if (currentRunProps == null) {
+                logger.warn("activeRunProperties was null during stopLoadTest for runId: {}. Using default reporting settings for shutdown report decision.", currentRunId);
+            }
+
+
+            if (currentRunId != null && shutdownReportEnabled) {
                 logger.info("Generating final report for manually stopped run ID: {}", currentRunId);
                 summaryReportingService.generateAndLogSummaryReport(currentRunId);
             }
-            loadEmitterService.finalizeRunSession();
+            loadEmitterService.finalizeRunSessionState(); // Use the corrected method name
 
             response.put("message", "Load test (run ID: " + currentRunId + ") stopped successfully.");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("Error stopping load test for run ID: " + currentRunId, e);
             response.put("message", "Error stopping load test: " + e.getMessage());
-            return ResponseEntity.status(500).body(response);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 
@@ -175,7 +293,7 @@ public class LoadTestController {
             return ResponseEntity.ok(metrics);
         } catch (Exception e) {
             logger.error("Error retrieving load test status", e);
-            return ResponseEntity.status(500).body(Collections.emptyList());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.emptyList());
         }
     }
 
@@ -186,6 +304,7 @@ public class LoadTestController {
         boolean running = loadEmitterService.areEmittersRunning();
         response.put("running", running);
         response.put("currentRunId", running ? loadEmitterService.getCurrentRunId() : null);
+        response.put("currentConfigName", running ? loadEmitterService.getCurrentConfigName() : "N/A");
         return ResponseEntity.ok(response);
     }
 
@@ -196,7 +315,7 @@ public class LoadTestController {
             return ResponseEntity.ok(testHistoryService.listTestRuns());
         } catch (Exception e) {
             logger.error("Error fetching test history list", e);
-            return ResponseEntity.status(500).body(Collections.emptyList());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.emptyList());
         }
     }
 
@@ -212,11 +331,11 @@ public class LoadTestController {
             return ResponseEntity.ok(details);
         } catch (IOException e) {
             logger.error("IOException fetching details for run ID: {}", runId, e);
-            return ResponseEntity.status(500).body(Collections.emptyList());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.emptyList());
         }
         catch (Exception e) {
             logger.error("Generic error fetching details for run ID: {}", runId, e);
-            return ResponseEntity.status(500).body(Collections.emptyList());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.emptyList());
         }
     }
 
@@ -260,7 +379,41 @@ public class LoadTestController {
             return ResponseEntity.notFound().build();
         } catch (Exception e) {
             logger.error("Error exporting test run ID {}: format {}", runId, format, e);
-            return ResponseEntity.status(500).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/api/loadtest/compare")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> compareTestRuns(
+            @RequestParam List<String> runIds,
+            @RequestParam(required = false) String baselineRunId) {
+        try {
+            Map<String, Object> comparisonData = new HashMap<>();
+            List<Map<String, Object>> runDetailsList = new ArrayList<>();
+
+            for (String runId : runIds) {
+                List<SummaryReportingService.TargetReportData> details = testHistoryService.getTestRunDetails(runId);
+                Map<String, Object> runEntry = new HashMap<>();
+                runEntry.put("id", runId);
+                runEntry.put("runId", runId);
+                runEntry.put("metrics", details != null ? details : Collections.emptyList());
+
+                Optional<TestHistoryService.TestRunSummary> summary = testHistoryService.listTestRuns().stream().filter(s -> s.getRunId().equals(runId)).findFirst();
+                summary.ifPresent(testRunSummary -> runEntry.put("reportTimestamp", testRunSummary.getReportTimestamp()));
+
+                if (runId.equals(baselineRunId)) {
+                    runEntry.put("isBaseline", true);
+                }
+                runDetailsList.add(runEntry);
+            }
+            comparisonData.put("comparedRuns", runDetailsList);
+            comparisonData.put("baselineRunId", baselineRunId);
+
+            return ResponseEntity.ok(comparisonData);
+        } catch (Exception e) {
+            logger.error("Error preparing comparison data for run IDs: " + runIds, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.singletonMap("error", "Could not generate comparison: " + e.getMessage()));
         }
     }
 }

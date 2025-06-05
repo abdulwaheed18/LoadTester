@@ -8,8 +8,6 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         .metric-card { background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 1.5rem; border-radius: 0.5rem; margin-bottom: 1rem; }
-        .metric-title { font-size: 0.875rem; color: #6b7280; margin-bottom: 0.25rem; }
-        .metric-value { font-size: 1.5rem; font-weight: 600; color: #111827; }
         .status-badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 500; }
         .status-running { background-color: #d1fae5; color: #065f46; }
         .status-stopped { background-color: #fee2e2; color: #991b1b; }
@@ -17,19 +15,51 @@
         .progress-bar { height: 100%; text-align: center; line-height: 1rem; color: white; font-size: 0.75rem;}
         .progress-bar-success { background-color: #22c55e; } /* green-500 */
         .progress-bar-failure { background-color: #ef4444; } /* red-500 */
-        .history-link { margin-top: 1rem; display: inline-block; background-color: #60a5fa; color:white; padding: 0.5rem 1rem; border-radius:0.375rem; text-decoration: none; }
+        .history-link { display: inline-block; background-color: #60a5fa; color:white; padding: 0.5rem 1rem; border-radius:0.375rem; text-decoration: none; }
         .history-link:hover { background-color: #3b82f6; }
         .config-section { background-color: #f3f4f6; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1.5rem; }
         .config-title { font-size: 1.125rem; font-semibold; color: #1f2937; margin-bottom: 0.75rem;}
         .config-item { margin-bottom: 0.5rem; font-size: 0.875rem; }
         .config-label { font-weight: 500; color: #374151; }
         .target-card { border: 1px solid #d1d5db; padding: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem; background-color: white;}
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5); display: flex;
+            align-items: center; justify-content: center; z-index: 1000;
+            opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal.active { opacity: 1; visibility: visible; }
+        .modal-content {
+            background-color: white; padding: 1.5rem 2rem; /* Adjusted padding */
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 90%; max-width: 700px; /* Increased max-width */
+            max-height: 90vh; overflow-y: auto; /* Increased max-height */
+        }
+        .form-input, .form-select, .form-textarea { /* Combined styles */
+            width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db;
+            border-radius: 0.375rem; margin-top: 0.25rem; margin-bottom: 0.75rem;
+            box-sizing: border-box; font-size: 0.875rem;
+        }
+         .form-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; }
+
+        .form-label { font-weight: 500; color: #374151; display: block; margin-bottom: 0.1rem; font-size: 0.875rem;}
+        .target-config-block { border: 1px solid #e5e7eb; padding: 1rem; margin-bottom: 1rem; border-radius: 0.375rem; }
+        .toast-message {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            padding: 10px 20px; border-radius: 5px; color: white;
+            font-size: 0.875rem; z-index: 2000;
+            opacity: 0; transition: opacity 0.5s ease-in-out;
+        }
+        .toast-message.show { opacity: 1; }
+        .toast-success { background-color: #28a745; }
+        .toast-error { background-color: #dc3545; }
+        .toast-info { background-color: #17a2b8; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 p-4 md:p-8">
 
 <div class="max-w-7xl mx-auto">
-    <header class="mb-8 flex justify-between items-center">
+    <header class="mb-8 flex flex-wrap justify-between items-center gap-4">
         <div>
             <h1 class="text-3xl font-bold text-gray-900">Load Tester Dashboard</h1>
             <p class="text-gray-600">Control and monitor your load tests in real-time.</p>
@@ -39,9 +69,28 @@
         </div>
     </header>
 
-    <!-- Configuration Display Section -->
+    <!-- Configuration Selection Section -->
+    <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-gray-700">Test Configuration</h2>
+        <div class="mb-4">
+            <label for="configSelection" class="form-label">Active Configuration:</label>
+            <select id="configSelection" class="form-select mt-1 block w-full">
+                <option value="">Default (from application.yml)</option>
+                <!-- Options will be populated by JavaScript -->
+            </select>
+        </div>
+        <button id="manageConfigsButton" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-150 ease-in-out">
+            Manage Configurations
+        </button>
+        <div id="currentConfigNameDisplay" class="mt-3 text-sm text-gray-600">
+            Currently using: <span class="font-semibold">Default (from application.yml)</span>
+        </div>
+    </div>
+
+
+    <!-- Configuration Display Section (shows details of selected/default config) -->
     <div id="configDisplaySection" class="bg-white p-6 rounded-lg shadow-md mb-8">
-        <h2 class="text-xl font-semibold mb-4 text-gray-700">Current Configuration</h2>
+        <h2 class="text-xl font-semibold mb-4 text-gray-700">Effective Configuration Details</h2>
         <div id="configDetails">
             <p class="text-gray-500">Loading configuration...</p>
         </div>
@@ -66,8 +115,9 @@
         <div class="text-sm text-gray-500">
             Current Run ID: <span id="currentRunIdLabel" class="font-mono">N/A</span>
         </div>
-        <div id="messageArea" class="mt-4 text-sm text-gray-700"></div>
     </div>
+    <div id="messageArea" class="fixed bottom-5 right-5 z-50"></div>
+
 
     <div class="bg-white p-6 rounded-lg shadow-md">
         <h2 class="text-xl font-semibold mb-4">Live Metrics</h2>
@@ -79,219 +129,638 @@
     </div>
 </div>
 
-<script>
-    const startButton = document.getElementById('startButton');
-    const stopButton = document.getElementById('stopButton');
-    const testStatusBadge = document.getElementById('testStatusBadge');
-    const metricsContainer = document.getElementById('metricsContainer');
-    const messageArea = document.getElementById('messageArea');
-    const noMetricsMessage = document.getElementById('noMetricsMessage');
-    const currentRunIdLabel = document.getElementById('currentRunIdLabel');
-    const configDetailsContainer = document.getElementById('configDetails');
+<!-- Modal for Managing Configurations -->
+<div id="configManagerModal" class="modal">
+    <div class="modal-content">
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="text-2xl font-semibold text-gray-800">Manage Test Configurations</h3>
+            <button id="closeConfigModal" class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button>
+        </div>
 
+        <div class="mb-6">
+            <button id="createNewConfigButton" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg mb-3">Create New Configuration</button>
+            <h4 class="text-lg font-medium text-gray-700 mt-2 mb-2">Saved Configurations:</h4>
+            <div class="max-h-40 overflow-y-auto border rounded-md p-2 bg-gray-50">
+                <ul id="savedConfigsList" class="space-y-1 ">
+                    <li class="text-gray-500 p-2">Loading configurations...</li>
+                </ul>
+            </div>
+        </div>
 
-    let statusInterval;
-    let metricsInterval;
+        <hr class="my-6">
 
-    async function fetchTestConfig() {
-        try {
-            const response = await fetch('/api/loadtest/config');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+        <div id="configFormContainer" class="hidden"> <!-- Hidden by default -->
+            <h4 id="configFormTitle" class="text-xl font-medium text-gray-700 mb-4">Create New Configuration</h4>
+            <form id="configForm">
+                <input type="hidden" id="configIdInput">
+                <div>
+                    <label for="configNameInput" class="form-label">Configuration Name:</label>
+                    <input type="text" id="configNameInput" class="form-input" required>
+                </div>
+                <div>
+                    <label for="configDescriptionInput" class="form-label">Description:</label>
+                    <textarea id="configDescriptionInput" class="form-textarea" rows="2"></textarea>
+                </div>
+                <div>
+                    <label for="configRunDurationInput" class="form-label">Run Duration (minutes, 0 for indefinite):</label>
+                    <input type="number" id="configRunDurationInput" class="form-input" min="0" value="0">
+                </div>
+
+                <h5 class="text-md font-medium text-gray-700 mt-5 mb-3">Targets:</h5>
+                <div id="targetsContainer" class="space-y-4">
+                    <!-- Target blocks will be added here by JS -->
+                </div>
+                <button type="button" id="addTargetButton" class="mt-3 bg-blue-500 hover:bg-blue-600 text-white text-sm py-1.5 px-3 rounded-md">Add Target</button>
+
+                <div class="mt-8 flex justify-end space-x-3">
+                    <button type="button" id="cancelConfigForm" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg">Cancel/Clear Form</button>
+                    <button type="submit" id="saveConfigButton" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg">Save Configuration</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!--
+    Regarding Thymeleaf error: "Could not parse as expression: "'',''" (template: "dashboard" - line 574, col 80)"
+    This error indicates that a th:* attribute in your dashboard.html (or an included fragment)
+    literally contains the string "'',''" (or something like "'' , ''") which Thymeleaf tried to parse as an expression.
+    The version of dashboard.html above primarily uses client-side JavaScript for dynamic content and has minimal th:* attributes in the body.
+    If this error persists with this version:
+    1. Double-check your local 'dashboard.html' for any th:* attributes (e.g., th:onclick, th:attr, th:data-*)
+       that might inadvertently contain or evaluate to the literal string "'',''".
+    2. Check any Thymeleaf fragments or layouts included in dashboard.html.
+    3. The line number (574) might be misleading if the error is due to an earlier HTML parsing issue (e.g., unclosed quotes)
+       causing Thymeleaf to misinterpret subsequent content.
+    The th:inline="none" attribute below is a defensive measure, though the reported error type usually points to a th:* attribute's value.
+-->
+<script th:inline="none">
+    //<![CDATA[
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const testStatusBadge = document.getElementById('testStatusBadge');
+        const metricsContainer = document.getElementById('metricsContainer');
+        const messageArea = document.getElementById('messageArea');
+        const noMetricsMessage = document.getElementById('noMetricsMessage');
+        const currentRunIdLabel = document.getElementById('currentRunIdLabel');
+        const configDetailsContainer = document.getElementById('configDetails');
+
+        const configSelection = document.getElementById('configSelection');
+        const manageConfigsButton = document.getElementById('manageConfigsButton');
+        const configManagerModal = document.getElementById('configManagerModal');
+        const closeConfigModalButton = document.getElementById('closeConfigModal');
+        const createNewConfigButton = document.getElementById('createNewConfigButton');
+        const savedConfigsList = document.getElementById('savedConfigsList');
+        const configFormContainer = document.getElementById('configFormContainer');
+        const configFormTitle = document.getElementById('configFormTitle');
+        const configForm = document.getElementById('configForm');
+        const configIdInput = document.getElementById('configIdInput');
+        const configNameInput = document.getElementById('configNameInput');
+        const configDescriptionInput = document.getElementById('configDescriptionInput');
+        const configRunDurationInput = document.getElementById('configRunDurationInput');
+        const targetsContainer = document.getElementById('targetsContainer');
+        const addTargetButton = document.getElementById('addTargetButton');
+        const cancelConfigFormButton = document.getElementById('cancelConfigForm');
+        const currentConfigNameDisplay = document.getElementById('currentConfigNameDisplay').querySelector('span');
+
+        let statusInterval, metricsInterval;
+        let currentEditingConfigId = null;
+
+        function showToast(text, type = 'info') {
+            const toast = document.createElement('div');
+            toast.textContent = text;
+            toast.className = `toast-message ${type === 'success' ? 'toast-success' : type === 'error' ? 'toast-error' : 'toast-info'}`;
+            messageArea.appendChild(toast);
+            setTimeout(() => { toast.classList.add('show'); }, 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => { toast.remove(); }, 500);
+            }, 4000);
+        }
+
+        async function fetchEffectiveTestConfig() {
+            const selectedConfigId = configSelection.value;
+            let url = '/api/loadtest/config';
+            if (selectedConfigId) {
+                url += `?configurationId=${selectedConfigId}`;
             }
-            const config = await response.json();
-            renderTestConfig(config);
-        } catch (error) {
-            console.error('Error fetching test configuration:', error);
-            configDetailsContainer.innerHTML = `<p class="text-red-500">Error loading configuration: ${error.message}</p>`;
-        }
-    }
+            currentConfigNameDisplay.textContent = configSelection.options[configSelection.selectedIndex].text;
 
-    function renderTestConfig(config) {
-        if (!config || Object.keys(config).length === 0) {
-            configDetailsContainer.innerHTML = '<p class="text-gray-500">No configuration data available.</p>';
-            return;
-        }
-        if (config.error) {
-             configDetailsContainer.innerHTML = `<p class="text-red-500">Error loading configuration: ${config.error}</p>`;
-            return;
+            try {
+                configDetailsContainer.innerHTML = '<p class="text-gray-500">Loading effective configuration...</p>';
+                const response = await fetch(url);
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+                const config = await response.json();
+                renderTestConfigDetails(config);
+            } catch (error) {
+                console.error('Error fetching effective test configuration:', error);
+                configDetailsContainer.innerHTML = `<p class="text-red-500">Error loading configuration: ${error.message}</p>`;
+            }
         }
 
-        let html = `<div class="config-section">`;
-        html += `<div class="config-item"><span class="config-label">Run Duration:</span> ${config.runDurationMinutesConfigured > 0 ? config.runDurationMinutesConfigured + ' minutes' : 'Indefinite'}</div>`;
-        html += `<div class="config-item"><span class="config-label">Periodic Reporting:</span> ${config.periodicReportingEnabled ? 'Enabled (Every ' + (config.periodicReportIntervalMs/1000) + 's)' : 'Disabled'}</div>`;
-        html += `<div class="config-item"><span class="config-label">History Directory:</span> <span class="font-mono text-xs">${config.historyDirectory || 'N/A'}</span></div>`;
-        html += `</div>`;
+        function renderTestConfigDetails(config) {
+            if (!config || Object.keys(config).length === 0) {
+                configDetailsContainer.innerHTML = '<p class="text-gray-500">No configuration data available.</p>';
+                return;
+            }
+            if (config.error) {
+                 configDetailsContainer.innerHTML = `<p class="text-red-500">Error loading configuration: ${config.error}</p>`;
+                return;
+            }
 
-        if (config.targets && config.targets.length > 0) {
-            html += `<h3 class="config-title mt-4">Targets (${config.targets.length}):</h3>`;
-            html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">`;
-            config.targets.forEach(target => {
-                html += `<div class="target-card">
-                            <p class="font-semibold text-blue-600">${target.name}</p>
-                            <p class="text-xs text-gray-600 truncate" title="${target.url}">${target.method} - ${target.url}</p>
-                            <p class="text-xs"><span class="config-label">Desired TPS:</span> ${target.desiredTps === 0 ? 'Max Effort' : target.desiredTps}</p>
-                            <p class="text-xs"><span class="config-label">Throttle Interval:</span> ${target.throttleIntervalMs} ms</p>
-                            <p class="text-xs"><span class="config-label">Has Payload:</span> ${target.hasPayload ? 'Yes' : 'No'}</p>
-                         </div>`;
-            });
+            let html = `<div class="config-section">`;
+            html += `<div class="config-item"><span class="config-label">Active Config:</span> ${config.activeConfigurationName || 'Default'}</div>`;
+            html += `<div class="config-item"><span class="config-label">Run Duration:</span> ${config.runDurationMinutesConfigured > 0 ? config.runDurationMinutesConfigured + ' minutes' : 'Indefinite'}</div>`;
+            html += `<div class="config-item"><span class="config-label">Periodic Reporting:</span> ${config.periodicReportingEnabled ? 'Enabled (Every ' + (config.periodicReportIntervalMs/1000) + 's)' : 'Disabled'}</div>`;
             html += `</div>`;
-        } else {
-            html += '<p class="text-gray-500 mt-2">No targets configured.</p>';
-        }
-        configDetailsContainer.innerHTML = html;
-    }
 
-
-    async function updateTestRunningStatus() {
-        try {
-            const response = await fetch('/api/loadtest/isrunning');
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const data = await response.json();
-            if (data.running) {
-                testStatusBadge.textContent = 'Running';
-                testStatusBadge.className = 'status-badge status-running';
-                startButton.disabled = true;
-                stopButton.disabled = false;
-                currentRunIdLabel.textContent = data.currentRunId || 'N/A';
+            if (config.targets && config.targets.length > 0) {
+                html += `<h3 class="config-title mt-4">Targets (${config.targets.length}):</h3>`;
+                html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">`;
+                config.targets.forEach(target => {
+                    html += `<div class="target-card">
+                                <p class="font-semibold text-blue-600">${target.name}</p>
+                                <p class="text-xs text-gray-600 truncate" title="${target.url}">${target.method} - ${target.url}</p>
+                                <p class="text-xs"><span class="config-label">Desired TPS:</span> ${target.desiredTps === 0 ? 'Max Effort' : target.desiredTps}</p>
+                                <p class="text-xs"><span class="config-label">Throttle Interval:</span> ${target.throttleIntervalMs} ms</p>
+                                <p class="text-xs"><span class="config-label">Has Payload:</span> ${target.hasPayload ? 'Yes' : 'No'}</p>
+                             </div>`;
+                });
+                html += `</div>`;
             } else {
-                testStatusBadge.textContent = 'Stopped';
+                html += '<p class="text-gray-500 mt-2">No targets configured in the effective configuration.</p>';
+            }
+            configDetailsContainer.innerHTML = html;
+        }
+        configSelection.addEventListener('change', fetchEffectiveTestConfig);
+
+        async function updateTestRunningStatus() {
+            try {
+                const response = await fetch('/api/loadtest/isrunning');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                if (data.running) {
+                    testStatusBadge.textContent = 'Running';
+                    testStatusBadge.className = 'status-badge status-running';
+                    startButton.disabled = true;
+                    stopButton.disabled = false;
+                    configSelection.disabled = true;
+                    manageConfigsButton.disabled = true;
+                    currentRunIdLabel.textContent = data.currentRunId || 'N/A';
+                    currentConfigNameDisplay.textContent = data.currentConfigName || 'N/A';
+                } else {
+                    testStatusBadge.textContent = 'Stopped';
+                    testStatusBadge.className = 'status-badge status-stopped';
+                    startButton.disabled = false;
+                    stopButton.disabled = true;
+                    configSelection.disabled = false;
+                    manageConfigsButton.disabled = false;
+                    currentRunIdLabel.textContent = 'N/A';
+                    currentConfigNameDisplay.textContent = configSelection.options[configSelection.selectedIndex]?.text || 'Default (application.yml)';
+                    if(configSelection.value){
+                        fetchEffectiveTestConfig();
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching running status:', error);
+                testStatusBadge.textContent = 'Error';
                 testStatusBadge.className = 'status-badge status-stopped';
-                startButton.disabled = false;
-                stopButton.disabled = true;
-                currentRunIdLabel.textContent = 'N/A';
+                showToast(`Error updating status: ${error.message}`, 'error');
             }
-        } catch (error) {
-            console.error('Error fetching running status:', error);
-            testStatusBadge.textContent = 'Error';
-            testStatusBadge.className = 'status-badge status-stopped';
-            showMessage(`Error updating status: ${error.message}`, 'error');
-        }
-    }
+         }
 
-    async function fetchMetrics() {
-        try {
-            const response = await fetch('/api/loadtest/status');
-             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const metrics = await response.json();
-            renderMetrics(metrics);
-        } catch (error) {
-            console.error('Error fetching metrics:', error);
-            showMessage(`Error fetching metrics: ${error.message}`, 'error');
-             if (noMetricsMessage) noMetricsMessage.textContent = 'Could not fetch metrics. See console for errors.';
-        }
-    }
-
-    function renderMetrics(targets) {
-        metricsContainer.innerHTML = '';
-        if (!targets || targets.length === 0) {
-            if (noMetricsMessage) {
-                metricsContainer.appendChild(noMetricsMessage);
-                noMetricsMessage.style.display = 'block';
-                noMetricsMessage.textContent = 'No metrics data available yet. Start the test or wait for data.';
+        async function fetchMetrics() {
+            if (testStatusBadge.textContent === 'Initializing...' || testStatusBadge.textContent === 'Running' || (startButton.disabled && stopButton.disabled === false)) {
+                try {
+                    const response = await fetch('/api/loadtest/status');
+                     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    const metrics = await response.json();
+                    renderMetrics(metrics);
+                } catch (error) {
+                    console.error('Error fetching metrics:', error);
+                    if (noMetricsMessage) noMetricsMessage.textContent = 'Could not fetch metrics. Retrying...';
+                }
+            } else if (testStatusBadge.textContent === 'Stopped' && metricsContainer.innerHTML !== '' && metricsContainer.firstChild?.id !== 'noMetricsMessage') {
+               // Keep old metrics displayed
             }
-            return;
         }
-        if (noMetricsMessage) noMetricsMessage.style.display = 'none';
+        function renderMetrics(targets) {
+            metricsContainer.innerHTML = '';
+            if (!targets || targets.length === 0) {
+                if (noMetricsMessage) {
+                    metricsContainer.appendChild(noMetricsMessage);
+                    noMetricsMessage.style.display = 'block';
+                    noMetricsMessage.textContent = testStatusBadge.textContent === 'Running' ? 'Metrics data incoming...' : 'No metrics data available yet.';
+                }
+                return;
+            }
+            if (noMetricsMessage) noMetricsMessage.style.display = 'none';
 
-        targets.forEach(target => {
-            const card = document.createElement('div');
-            card.className = 'metric-card shadow-lg';
-            const totalCompleted = target.successfulRequests + target.failedRequests;
-            const successPercentage = totalCompleted > 0 ? (target.successfulRequests / totalCompleted) * 100 : 0;
-            const failurePercentage = totalCompleted > 0 ? (target.failedRequests / totalCompleted) * 100 : 0;
+            targets.forEach(target => {
+                const card = document.createElement('div');
+                card.className = 'metric-card shadow-lg';
+                const totalCompleted = target.successfulRequests + target.failedRequests;
+                const successPercentage = totalCompleted > 0 ? (target.successfulRequests / totalCompleted) * 100 : 0;
+                const failurePercentage = totalCompleted > 0 ? (target.failedRequests / totalCompleted) * 100 : 0;
 
-            card.innerHTML = `
-                <h3 class="text-lg font-semibold text-blue-700 mb-3">${target.name}</h3>
-                <p class="text-xs text-gray-500 truncate mb-2" title="${target.url}">${target.method} - ${target.url}</p>
-                <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-3">
-                    <div><span class="font-medium">Desired TPS:</span> ${target.desiredTps === 0 ? 'Max Effort' : target.desiredTps}</div>
-                    <div><span class="font-medium">Initiated:</span> ${formatNumber(target.initiatedRequests)}</div>
-                    <div><span class="font-medium text-green-600">Successful:</span> ${formatNumber(target.successfulRequests)}</div>
-                    <div><span class="font-medium text-red-600">Failed:</span> ${formatNumber(target.failedRequests)}</div>
-                    <div><span class="font-medium">Throttled:</span> ${formatNumber(target.throttledRequests)}</div>
-                    <div><span class="font-medium">Dropped (BP):</span> ${formatNumber(target.backpressureDroppedRequests)}</div>
-                </div>
-                ${target.latencyData ? `
-                    <div class="text-sm mb-3">
-                        <strong>Latency (ms):</strong> Avg: ${formatNumber(target.latencyData.avg, 2)}, Max: ${formatNumber(target.latencyData.max, 2)}, Count: ${formatNumber(target.latencyData.count)}
+                card.innerHTML = `
+                    <h3 class="text-lg font-semibold text-blue-700 mb-3">${target.name}</h3>
+                    <p class="text-xs text-gray-500 truncate mb-2" title="${target.url}">${target.method} - ${target.url}</p>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-3">
+                        <div><span class="font-medium">Desired TPS:</span> ${target.desiredTps === 0 ? 'Max Effort' : target.desiredTps}</div>
+                        <div><span class="font-medium">Initiated:</span> ${formatNumber(target.initiatedRequests)}</div>
+                        <div><span class="font-medium text-green-600">Successful:</span> ${formatNumber(target.successfulRequests)}</div>
+                        <div><span class="font-medium text-red-600">Failed:</span> ${formatNumber(target.failedRequests)}</div>
+                        <div><span class="font-medium">Throttled:</span> ${formatNumber(target.throttledRequests)}</div>
+                        <div><span class="font-medium">Dropped (BP):</span> ${formatNumber(target.backpressureDroppedRequests)}</div>
                     </div>
-                ` : '<p class="text-sm text-gray-500 mb-3">Latency: N/A</p>'}
-                <div class="mb-1 text-xs font-medium">Success/Failure Ratio (${formatNumber(totalCompleted)} completed):</div>
-                <div class="progress-bar-container mb-3">
-                    <div class="progress-bar progress-bar-success" style="width: ${successPercentage.toFixed(1)}%;" title="Success: ${successPercentage.toFixed(1)}%">${successPercentage >= 10 ? successPercentage.toFixed(1) + '%' : ''}</div>
-                    <div class="progress-bar progress-bar-failure" style="width: ${failurePercentage.toFixed(1)}%;" title="Failure: ${failurePercentage.toFixed(1)}%">${failurePercentage >= 10 ? failurePercentage.toFixed(1) + '%' : ''}</div>
-                </div>
-                <details class="text-sm">
-                    <summary class="cursor-pointer text-blue-600 hover:underline">Status Codes</summary>
-                    <ul class="mt-2 list-disc list-inside pl-2">
-                        ${Object.entries(target.statusCodeCounts || {}).map(([code, count]) => `<li>${code}: ${formatNumber(count)}</li>`).join('') || '<li class="text-gray-500">No status code data.</li>'}
-                    </ul>
-                </details>
-            `;
-            metricsContainer.appendChild(card);
+                    ${target.latencyData ? `
+                        <div class="text-sm mb-3">
+                            <strong>Latency (ms):</strong> Avg: ${formatNumber(target.latencyData.avg, 2)}, Max: ${formatNumber(target.latencyData.max, 2)}, Count: ${formatNumber(target.latencyData.count)}
+                        </div>
+                    ` : '<p class="text-sm text-gray-500 mb-3">Latency: N/A</p>'}
+                    <div class="mb-1 text-xs font-medium">Success/Failure Ratio (${formatNumber(totalCompleted)} completed):</div>
+                    <div class="progress-bar-container mb-3 flex">
+                        <div class="progress-bar progress-bar-success" style="width: ${successPercentage.toFixed(1)}%;" title="Success: ${successPercentage.toFixed(1)}%">${successPercentage >= 10 ? successPercentage.toFixed(1) + '%' : ''}</div>
+                        <div class="progress-bar progress-bar-failure" style="width: ${failurePercentage.toFixed(1)}%;" title="Failure: ${failurePercentage.toFixed(1)}%">${failurePercentage >= 10 ? failurePercentage.toFixed(1) + '%' : ''}</div>
+                    </div>
+                    <details class="text-sm">
+                        <summary class="cursor-pointer text-blue-600 hover:underline">Status Codes</summary>
+                        <ul class="mt-2 list-disc list-inside pl-2">
+                            ${Object.entries(target.statusCodeCounts || {}).map(([code, count]) => `<li>${code}: ${formatNumber(count)}</li>`).join('') || '<li class="text-gray-500">No status code data.</li>'}
+                        </ul>
+                    </details>
+                `;
+                metricsContainer.appendChild(card);
+            });
+        }
+        function formatNumber(num, decimalPlaces = 0) {
+            if (num === null || num === undefined) return 'N/A';
+            return Number(num).toLocaleString(undefined, { minimumFractionDigits: decimalPlaces, maximumFractionDigits: decimalPlaces });
+        }
+
+        startButton.addEventListener('click', async () => {
+            const selectedConfigId = configSelection.value;
+            let startUrl = '/api/loadtest/start';
+            if (selectedConfigId) {
+                startUrl += `?configurationId=${selectedConfigId}`;
+            }
+
+            showToast('Starting test...', 'info');
+            try {
+                const response = await fetch(startUrl, { method: 'POST' });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+
+                showToast(data.message || 'Test started successfully.', 'success');
+                if(data.runId) currentRunIdLabel.textContent = data.runId;
+                await updateTestRunningStatus();
+                fetchMetrics();
+            } catch (error) {
+                console.error('Error starting test:', error);
+                showToast(`Error starting test: ${error.message}`, 'error');
+                await updateTestRunningStatus();
+            }
         });
-    }
+        stopButton.addEventListener('click', async () => {
+            showToast('Stopping test...', 'info');
+            try {
+                const response = await fetch('/api/loadtest/stop', { method: 'POST' });
+                const data = await response.json();
+                 if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+                showToast(data.message || 'Test stopped successfully.', 'success');
+                await updateTestRunningStatus();
+            } catch (error) {
+                console.error('Error stopping test:', error);
+                showToast(`Error stopping test: ${error.message}`, 'error');
+                await updateTestRunningStatus();
+            }
+        });
 
-    function formatNumber(num, decimalPlaces = 0) {
-        if (num === null || num === undefined) return 'N/A';
-        return Number(num).toLocaleString(undefined, { minimumFractionDigits: decimalPlaces, maximumFractionDigits: decimalPlaces });
-    }
+        manageConfigsButton.addEventListener('click', () => {
+            configManagerModal.classList.add('active');
+            loadSavedConfigurationsToList();
+            resetConfigForm();
+            configFormContainer.classList.add('hidden');
+        });
+        closeConfigModalButton.addEventListener('click', () => configManagerModal.classList.remove('active'));
 
-    function showMessage(text, type = 'info') {
-        messageArea.textContent = text;
-        messageArea.className = 'mt-4 text-sm p-3 rounded-md transition-opacity duration-300 opacity-100';
-        if (type === 'error') messageArea.classList.add('bg-red-100', 'text-red-700');
-        else if (type === 'success') messageArea.classList.add('bg-green-100', 'text-green-700');
-        else messageArea.classList.add('bg-blue-100', 'text-blue-700');
-        setTimeout(() => { messageArea.classList.remove('opacity-100'); messageArea.classList.add('opacity-0');}, 4700);
-         setTimeout(() => { messageArea.textContent = ''; messageArea.className = 'mt-4 text-sm';}, 5000);
-    }
+        createNewConfigButton.addEventListener('click', () => {
+            resetConfigForm();
+            configFormTitle.textContent = "Create New Configuration";
+            currentEditingConfigId = null;
+            configFormContainer.classList.remove('hidden');
+        });
+        cancelConfigFormButton.addEventListener('click', () => {
+            resetConfigForm();
+            configFormContainer.classList.add('hidden');
+        });
 
-    startButton.addEventListener('click', async () => {
-        showMessage('Starting test...', 'info');
-        try {
-            const response = await fetch('/api/loadtest/start', { method: 'POST' });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
-            showMessage(data.message || 'Test started successfully.', 'success');
-            if(data.runId) currentRunIdLabel.textContent = data.runId;
-            await updateTestRunningStatus();
+        async function loadSavedConfigurationsToList() {
+            savedConfigsList.innerHTML = '<li class="p-2">Loading...</li>';
+            try {
+                const response = await fetch('/api/loadtest/configurations');
+                if (!response.ok) throw new Error('Failed to fetch configurations');
+                const configs = await response.json();
+
+                savedConfigsList.innerHTML = '';
+                if (configs.length === 0) {
+                    savedConfigsList.innerHTML = '<li class="p-2 text-gray-500">No saved configurations found.</li>';
+                    return;
+                }
+                configs.forEach(config => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center py-1.5 px-2 hover:bg-gray-100 rounded-md';
+                    li.innerHTML = `
+                        <span class="cursor-pointer hover:underline text-blue-600" data-configid="${config.id}">${config.name}</span>
+                        <div class="space-x-2">
+                            <button class="text-indigo-600 hover:text-indigo-800 text-xs font-medium edit-config-btn" data-configid="${config.id}">Edit</button>
+                            <button class="text-red-600 hover:text-red-800 text-xs font-medium delete-config-btn" data-configid="${config.id}" data-configname="${config.name}">Delete</button>
+                        </div>
+                    `;
+                    savedConfigsList.appendChild(li);
+                });
+            } catch (error) {
+                console.error("Error loading saved configurations:", error);
+                savedConfigsList.innerHTML = '<li class="p-2 text-red-600">Error loading configurations.</li>';
+            }
+        }
+
+        savedConfigsList.addEventListener('click', async (event) => {
+            const target = event.target;
+            if (target.classList.contains('edit-config-btn') || (target.tagName === 'SPAN' && target.dataset.configid)) {
+                const configId = target.dataset.configid;
+                await loadConfigIntoForm(configId);
+            } else if (target.classList.contains('delete-config-btn')) {
+                const configId = target.dataset.configid;
+                const configName = target.dataset.configname;
+                if (confirm(`Are you sure you want to delete configuration "${configName}"?`)) {
+                    await deleteConfiguration(configId);
+                }
+            }
+        });
+
+        async function loadConfigIntoForm(configId) {
+            try {
+                showToast('Loading configuration for edit...', 'info');
+                const response = await fetch(`/api/loadtest/configurations/${configId}`);
+                if (!response.ok) throw new Error('Failed to fetch configuration details');
+                const config = await response.json();
+
+                configFormTitle.textContent = `Edit Configuration: ${config.name}`;
+                configIdInput.value = config.id;
+                configNameInput.value = config.name;
+                configDescriptionInput.value = config.description || '';
+                configRunDurationInput.value = config.runDurationMinutes === undefined ? 0 : config.runDurationMinutes;
+
+                targetsContainer.innerHTML = '';
+                (config.targets || []).forEach(addTargetToForm);
+                if ((config.targets || []).length === 0) {
+                     addTargetToForm();
+                }
+                currentEditingConfigId = config.id;
+                configFormContainer.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Error loading config into form:", error);
+                showToast('Failed to load configuration for editing.', 'error');
+            }
+        }
+
+        async function deleteConfiguration(configId) {
+            try {
+                const response = await fetch(`/api/loadtest/configurations/${configId}`, { method: 'DELETE' });
+                if (!response.ok) {
+                     const errData = await response.json().catch(() => ({}));
+                     throw new Error(errData.message || 'Failed to delete configuration');
+                }
+                showToast('Configuration deleted successfully.', 'success');
+                loadSavedConfigurationsToList();
+                loadUserConfigurationsToSelection();
+                resetConfigForm();
+                configFormContainer.classList.add('hidden');
+            } catch (error) {
+                console.error("Error deleting configuration:", error);
+                showToast('Failed to delete configuration: ' + error.message, 'error');
+            }
+        }
+
+        function addTargetToForm(targetData = {}) {
+            const targetIndex = targetsContainer.children.length;
+            const targetDiv = document.createElement('div');
+            targetDiv.className = 'target-config-block p-4 border rounded-md mb-4 bg-white shadow-sm relative';
+            targetDiv.innerHTML = `
+                <button type="button" class="absolute top-2 right-2 text-red-500 hover:text-red-700 remove-target-btn p-1 text-xl leading-none">&times;</button>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+                    <div>
+                        <label class="form-label">Target Name:</label>
+                        <input type="text" class="form-input target-name" value="${targetData.name || `API-${targetIndex + 1}`}" required>
+                    </div>
+                    <div>
+                        <label class="form-label">URL:</label>
+                        <input type="url" class="form-input target-url" value="${targetData.url || ''}" placeholder="https://api.example.com/data" required>
+                    </div>
+                    <div>
+                        <label class="form-label">Method:</label>
+                        <select class="form-select target-method">
+                            <option value="GET" ${targetData.method === 'GET' ? 'selected' : ''}>GET</option>
+                            <option value="POST" ${targetData.method === 'POST' ? 'selected' : ''}>POST</option>
+                            <option value="PUT" ${targetData.method === 'PUT' ? 'selected' : ''}>PUT</option>
+                            <option value="DELETE" ${targetData.method === 'DELETE' ? 'selected' : ''}>DELETE</option>
+                            <option value="PATCH" ${targetData.method === 'PATCH' ? 'selected' : ''}>PATCH</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Desired TPS (0 for max):</label>
+                        <input type="number" class="form-input target-tps" value="${targetData.desiredTps === undefined ? 0 : targetData.desiredTps}" min="0">
+                    </div>
+                    <div>
+                        <label class="form-label">Throttle Interval (ms, 0 for none):</label>
+                        <input type="number" class="form-input target-throttle" value="${targetData.throttleIntervalMs === undefined ? 0 : targetData.throttleIntervalMs}" min="0">
+                    </div>
+                    <div>
+                        <label class="form-label">Payload Path (e.g., classpath:p.json):</label>
+                        <input type="text" class="form-input target-payload" value="${targetData.payloadPath || ''}" placeholder="classpath:payloads/data.json">
+                    </div>
+                </div>
+                <h6 class="text-sm font-medium text-gray-600 mt-3 mb-1.5">Headers (optional):</h6>
+                <div class="target-headers-container space-y-2">
+                    ${(targetData.headers ? Object.entries(targetData.headers) : [['','']]).map(([key, value])=>(key || value) ? `
+                        <div class="flex items-center space-x-2">
+                            <input type="text" placeholder="Header Name" class="form-input text-sm target-header-key" value="${key}">
+                            <span class="text-gray-500 self-center pb-2">:</span>
+                            <input type="text" placeholder="Header Value" class="form-input text-sm target-header-value" value="${value}">
+                            <button type="button" class="text-red-500 hover:text-red-700 remove-header-btn text-xs p-1 self-center mb-2">&times;</button>
+                        </div>
+                    ` : '').join('')
+                     || (targetData.headers && Object.keys(targetData.headers).length === 0 || !targetData.headers ?
+                        `<div class="flex items-center space-x-2">
+                            <input type="text" placeholder="Header Name" class="form-input text-sm target-header-key" value="">
+                            <span class="text-gray-500 self-center pb-2">:</span>
+                            <input type="text" placeholder="Header Value" class="form-input text-sm target-header-value" value="">
+                            <button type="button" class="text-red-500 hover:text-red-700 remove-header-btn text-xs p-1 self-center mb-2">&times;</button>
+                        </div>` : '')
+                }
+                </div>
+                <button type="button" class="add-header-btn mt-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs py-1 px-2.5 rounded-sm">Add Header</button>
+            `;
+            targetsContainer.appendChild(targetDiv);
+        }
+
+        addTargetButton.addEventListener('click', () => addTargetToForm());
+        targetsContainer.addEventListener('click', function(event) {
+            if (event.target.classList.contains('remove-target-btn')) {
+                event.target.closest('.target-config-block').remove();
+            }
+            if (event.target.classList.contains('add-header-btn')) {
+                const headersContainer = event.target.previousElementSibling;
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'flex items-center space-x-2 mt-1';
+                headerDiv.innerHTML = `
+                    <input type="text" placeholder="Header Name" class="form-input text-sm target-header-key">
+                    <span class="text-gray-500 self-center pb-2">:</span>
+                    <input type="text" placeholder="Header Value" class="form-input text-sm target-header-value">
+                    <button type="button" class="text-red-500 hover:text-red-700 remove-header-btn text-xs p-1 self-center mb-2">&times;</button>
+                `;
+                headersContainer.appendChild(headerDiv);
+            }
+            if (event.target.classList.contains('remove-header-btn')) {
+                 event.target.closest('div.flex').remove();
+            }
+        });
+
+        function resetConfigForm() {
+            configForm.reset();
+            configIdInput.value = '';
+            targetsContainer.innerHTML = '';
+            addTargetToForm();
+            configFormTitle.textContent = "Create New Configuration";
+            currentEditingConfigId = null;
+        }
+        configForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const configData = {
+                id: configIdInput.value || null,
+                name: configNameInput.value,
+                description: configDescriptionInput.value,
+                runDurationMinutes: parseInt(configRunDurationInput.value, 10) || 0,
+                targets: []
+            };
+
+            targetsContainer.querySelectorAll('.target-config-block').forEach(targetBlock => {
+                const target = {
+                    name: targetBlock.querySelector('.target-name').value,
+                    url: targetBlock.querySelector('.target-url').value,
+                    method: targetBlock.querySelector('.target-method').value,
+                    desiredTps: parseInt(targetBlock.querySelector('.target-tps').value, 10),
+                    throttleIntervalMs: parseInt(targetBlock.querySelector('.target-throttle').value, 10),
+                    payloadPath: targetBlock.querySelector('.target-payload').value.trim() || null,
+                    headers: {}
+                };
+                targetBlock.querySelectorAll('.target-headers-container > div.flex').forEach(headerDiv => {
+                    const key = headerDiv.querySelector('.target-header-key').value.trim();
+                    const value = headerDiv.querySelector('.target-header-value').value.trim();
+                    if (key) {
+                        target.headers[key] = value;
+                    }
+                });
+                if(target.name && target.url && target.method) {
+                     configData.targets.push(target);
+                } else {
+                    showToast('Skipping an incomplete target (Name, URL, Method are required).', 'info');
+                }
+            });
+
+            if (!configData.name) {
+                showToast('Configuration name is required.', 'error');
+                return;
+            }
+            if (configData.targets.length === 0 && targetsContainer.children.length > 0) {
+                 showToast('All targets are incomplete. Please fill required fields or remove them.', 'error');
+                 return;
+            }
+             if (configData.targets.length === 0 && targetsContainer.children.length === 0) {
+                showToast('At least one target is required. Click "Add Target".', 'error');
+                return;
+            }
+
+            const method = configData.id && currentEditingConfigId === configData.id ? 'PUT' : 'POST';
+            const url = method === 'PUT' ? `/api/loadtest/configurations/${configData.id}` : '/api/loadtest/configurations';
+
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(configData)
+                });
+                if (!response.ok) {
+                    const errorData = await response.json().catch(()=>({message: 'Save failed with status ' + response.status}));
+                    throw new Error(errorData.message || 'Failed to save configuration');
+                }
+                const saved = await response.json();
+                showToast(`Configuration "${saved.name}" saved successfully.`, 'success');
+                loadSavedConfigurationsToList();
+                loadUserConfigurationsToSelection();
+                if (method === 'POST') {
+                    resetConfigForm();
+                    configFormContainer.classList.add('hidden');
+                } else {
+                    loadConfigIntoForm(saved.id);
+                }
+            } catch (error) {
+                console.error("Error saving configuration:", error);
+                showToast('Error saving configuration: ' + error.message, 'error');
+            }
+        });
+
+        async function loadUserConfigurationsToSelection() {
+            try {
+                const response = await fetch('/api/loadtest/configurations');
+                if (!response.ok) throw new Error('Failed to fetch configurations for dropdown');
+                const configs = await response.json();
+
+                const currentSelectedValue = configSelection.value;
+                configSelection.innerHTML = '<option value="">Default (from application.yml)</option>';
+                configs.forEach(config => {
+                    const option = document.createElement('option');
+                    option.value = config.id;
+                    option.textContent = `${config.name}`;
+                    configSelection.appendChild(option);
+                });
+
+                if (configs.find(c => c.id === currentSelectedValue)) {
+                     configSelection.value = currentSelectedValue;
+                } else {
+                     configSelection.value = "";
+                }
+                fetchEffectiveTestConfig();
+            } catch (error) {
+                console.error('Error populating config selection:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchEffectiveTestConfig();
+            loadUserConfigurationsToSelection();
+            updateTestRunningStatus();
             fetchMetrics();
-        } catch (error) {
-            console.error('Error starting test:', error);
-            showMessage(`Error starting test: ${error.message}`, 'error');
-            await updateTestRunningStatus();
-        }
-    });
 
-    stopButton.addEventListener('click', async () => {
-        showMessage('Stopping test...', 'info');
-        try {
-            const response = await fetch('/api/loadtest/stop', { method: 'POST' });
-            const data = await response.json();
-             if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
-            showMessage(data.message || 'Test stopped successfully.', 'success');
-            await updateTestRunningStatus();
-        } catch (error) {
-            console.error('Error stopping test:', error);
-            showMessage(`Error stopping test: ${error.message}`, 'error');
-            await updateTestRunningStatus();
-        }
-    });
+            // Adjusted intervals for more frequent updates
+            statusInterval = setInterval(updateTestRunningStatus, 1000); // Status updates every 1 second
+            metricsInterval = setInterval(fetchMetrics, 2000);      // Metrics updates every 2 seconds
 
-    document.addEventListener('DOMContentLoaded', () => {
-        fetchTestConfig(); // Fetch and display config on load
-        updateTestRunningStatus();
-        fetchMetrics();
-        statusInterval = setInterval(updateTestRunningStatus, 3000);
-        metricsInterval = setInterval(fetchMetrics, 5000);
-    });
+            addTargetToForm();
+            configFormContainer.classList.add('hidden');
+        });
 
-    window.addEventListener('beforeunload', () => {
-        if (statusInterval) clearInterval(statusInterval);
-        if (metricsInterval) clearInterval(metricsInterval);
-    });
+        window.addEventListener('beforeunload', () => {
+            if (statusInterval) clearInterval(statusInterval);
+            if (metricsInterval) clearInterval(metricsInterval);
+        });
+    //]]>
 </script>
 </body>
 </html>
