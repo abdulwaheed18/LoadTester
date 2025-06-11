@@ -136,14 +136,12 @@
         </div>
     </div>
 
-    <!-- Test Control Section - Modified to include duration progress bar -->
     <div class="bg-white p-6 rounded-lg shadow-md mb-8">
         <h2 class="text-xl font-semibold mb-4">Test Control</h2>
-        <div class="flex space-x-4 items-center mb-4"> <!-- Increased margin-bottom -->
-            <button id="startButton"
-                    class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-150 ease-in-out disabled:opacity-50">
-                Start Test
-            </button>
+        <div class="flex space-x-4 items-center mb-4"> <button id="startButton"
+                                                               class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-150 ease-in-out disabled:opacity-50">
+            Start Test
+        </button>
             <button id="stopButton"
                     class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-150 ease-in-out disabled:opacity-50">
                 Stop Test
@@ -153,16 +151,13 @@
                 <span id="testStatusBadge" class="status-badge">Initializing...</span>
             </div>
         </div>
-        <div class="text-sm text-gray-500 mb-3"> <!-- Increased margin-bottom -->
-            Current Run ID: <span id="currentRunIdLabel" class="font-mono">N/A</span>
+        <div class="text-sm text-gray-500 mb-3"> Current Run ID: <span id="currentRunIdLabel" class="font-mono">N/A</span>
         </div>
 
-        <!-- Test Duration Progress Bar - NEW -->
-        <div id="testDurationProgressContainer" class="hidden mt-2"> <!-- Initially hidden -->
-            <div class="flex justify-between text-sm text-gray-600 mb-1">
-                <span id="elapsedTimeLabel">00:00</span>
-                <span id="totalDurationLabel">00:00</span>
-            </div>
+        <div id="testDurationProgressContainer" class="hidden mt-2"> <div class="flex justify-between text-sm text-gray-600 mb-1">
+            <span id="elapsedTimeLabel">00:00</span>
+            <span id="totalDurationLabel">00:00</span>
+        </div>
             <div class="duration-progress-bar-bg">
                 <div id="durationProgressBar" class="duration-progress-bar-fill" style="width: 0%;">
                     0%
@@ -415,6 +410,11 @@
                 testStatusBadge.textContent = 'Error';
                 testStatusBadge.className = 'status-badge status-stopped';
                 showToast(`Error updating status: ${error.message}`, 'error');
+                // Clean up progress bar on error
+                if (durationProgressInterval) clearInterval(durationProgressInterval);
+                durationProgressInterval = null;
+                testStartTime = null;
+                if(testDurationProgressContainer) testDurationProgressContainer.classList.add('hidden');
             }
          }
 

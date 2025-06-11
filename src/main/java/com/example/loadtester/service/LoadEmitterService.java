@@ -3,6 +3,7 @@ package com.example.loadtester.service;
 
 import com.example.loadtester.config.LoadTesterProperties;
 import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
@@ -31,6 +32,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 @Service
 public class LoadEmitterService implements DisposableBean {
@@ -186,7 +188,7 @@ public class LoadEmitterService implements DisposableBean {
                 sendRequest(endpoint)
                         .doOnSuccess(status -> {
                             requestTimerSample.stop(meterRegistry.timer("loadtester.request.latency",
-                                    Tags.of("target", targetName, "http_status", String.valueOf(status), "outcome", "success", "runId", activeRunId )));
+                                    Tags.of("target", targetName, "http_status", String.valueOf(status), "outcome", "success", "runId", activeRunId)));
                             meterRegistry.counter("loadtester.requests.completed",
                                     Tags.of("target", targetName, "http_status", String.valueOf(status), "outcome", "success", "runId", activeRunId)).increment();
                             meterRegistry.counter("loadtester.requests.by_status",
@@ -208,7 +210,7 @@ public class LoadEmitterService implements DisposableBean {
                             }
 
                             requestTimerSample.stop(meterRegistry.timer("loadtester.request.latency",
-                                    Tags.of("target", targetName, "http_status", httpStatusStr, "outcome", "failure", "runId", activeRunId )));
+                                    Tags.of("target", targetName, "http_status", httpStatusStr, "outcome", "failure", "runId", activeRunId)));
                             meterRegistry.counter("loadtester.requests.completed",
                                     Tags.of("target", targetName, "http_status", httpStatusStr, "outcome", "failure", "error_type", errorType, "runId", activeRunId)).increment();
                             logger.warn("[{}] (Run ID: {}) request #{} failed. Status: {}, Error Type: {}, Message: {}", targetName, activeRunId, tick, httpStatusStr, errorType, error.getMessage());
@@ -350,7 +352,17 @@ public class LoadEmitterService implements DisposableBean {
             timedStopFuture = null;
         }
         if (oldRunId != null) {
-            logger.info("Finalized session state for run ID: {}", oldRunId);
+            logger.info("Finalized session state for run ID: {}. Cleaning up associated metrics.", oldRunId);
+            final String runIdToRemove = oldRunId;
+            List<Meter> metersToRemove = meterRegistry.getMeters().stream()
+                    .filter(meter -> runIdToRemove.equals(meter.getId().getTag("runId")))
+                    .collect(Collectors.toList());
+
+            logger.info("Found {} meters to remove for run ID: {}", metersToRemove.size(), runIdToRemove);
+
+            metersToRemove.forEach(meter -> {
+                meterRegistry.remove(meter);
+            });
         }
         if (!activeEmitters.isEmpty()) {
             logger.warn("Finalizing run session state, but activeEmitters map is not empty. Clearing it now.");
