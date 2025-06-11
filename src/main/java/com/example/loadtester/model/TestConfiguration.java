@@ -16,7 +16,7 @@ public class TestConfiguration {
     private String id;
     private String name;
     private String description;
-    private int runDurationMinutes = 0;
+    private int runDurationSeconds = 0;
 
     private List<TargetEndpointConfig> targets;
 
@@ -26,11 +26,11 @@ public class TestConfiguration {
         }
     }
 
-    public TestConfiguration(String name, String description, int runDurationMinutes, List<TargetEndpointConfig> targets) {
+    public TestConfiguration(String name, String description, int runDurationSeconds, List<TargetEndpointConfig> targets) {
         this();
         this.name = name;
         this.description = description;
-        this.runDurationMinutes = runDurationMinutes;
+        this.runDurationSeconds = runDurationSeconds;
         this.targets = targets;
     }
 
@@ -58,12 +58,12 @@ public class TestConfiguration {
         this.description = description;
     }
 
-    public int getRunDurationMinutes() {
-        return runDurationMinutes;
+    public int getRunDurationSeconds() {
+        return runDurationSeconds;
     }
 
-    public void setRunDurationMinutes(int runDurationMinutes) {
-        this.runDurationMinutes = runDurationMinutes;
+    public void setRunDurationSeconds(int runDurationSeconds) {
+        this.runDurationSeconds = runDurationSeconds;
     }
 
     public List<TargetEndpointConfig> getTargets() {
@@ -130,11 +130,11 @@ public class TestConfiguration {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         TestConfiguration that = (TestConfiguration) o;
-        return runDurationMinutes == that.runDurationMinutes && Objects.equals(id, that.id) && Objects.equals(name, that.name) && Objects.equals(description, that.description) && Objects.equals(targets, that.targets);
+        return runDurationSeconds == that.runDurationSeconds && Objects.equals(id, that.id) && Objects.equals(name, that.name) && Objects.equals(description, that.description) && Objects.equals(targets, that.targets);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, name, description, runDurationMinutes, targets);
+        return Objects.hash(id, name, description, runDurationSeconds, targets);
     }
 }

@@ -190,7 +190,7 @@
         <h1>Load Test Summary Report</h1>
         <div class="report-meta">
             <p><strong>Report Generated:</strong> <span th:text="${reportTimestamp}"></span></p>
-            <p><strong>Total Run Duration (configured):</strong> <span th:text="${runDurationMinutes == 0 ? 'Indefinite' : runDurationMinutes + ' minutes'}"></span></p>
+            <p><strong>Total Run Duration (configured):</strong> <span th:text="${runDurationSeconds == 0 ? 'Indefinite' : runDurationSeconds + ' seconds'}"></span></p>
         </div>
 
         <div class="tabs">

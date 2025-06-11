@@ -16,18 +16,18 @@ import java.util.Map;
 public class LoadTesterProperties {
 
     @Min(value = 0, message = "Run duration must be 0 (indefinite) or positive.")
-    private int runDurationMinutes = 0; // Default to run indefinitely
+    private int runDurationSeconds = 0; // Default to run indefinitely
 
     private List<TargetEndpoint> targets;
     private Reporting reporting = new Reporting();
     private Http http = new Http(); // New HTTP configuration section
 
-    public int getRunDurationMinutes() {
-        return runDurationMinutes;
+    public int getRunDurationSeconds() {
+        return runDurationSeconds;
     }
 
-    public void setRunDurationMinutes(int runDurationMinutes) {
-        this.runDurationMinutes = runDurationMinutes;
+    public void setRunDurationSeconds(int runDurationSeconds) {
+        this.runDurationSeconds = runDurationSeconds;
     }
 
     public List<TargetEndpoint> getTargets() {

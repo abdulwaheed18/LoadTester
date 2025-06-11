@@ -228,12 +228,12 @@ public class LoadEmitterService implements DisposableBean {
             emittersRunning.set(true);
             logger.info("All configured load emitters started successfully for run ID: {}.", runId);
 
-            int runDurationMinutes = propertiesToUse.getRunDurationMinutes();
-            if (runDurationMinutes > 0) {
-                logger.info("Load test session (run ID: {}) scheduled to run for {} minutes.", runId, runDurationMinutes);
+            int runDurationSeconds = propertiesToUse.getRunDurationSeconds();
+            if (runDurationSeconds > 0) {
+                logger.info("Load test session (run ID: {}) scheduled to run for {} seconds.", runId, runDurationSeconds);
                 final String capturedRunId = this.currentRunId.get();
                 timedStopFuture = timedStopScheduler.schedule(() -> {
-                    logger.info("Configured run duration of {} minutes reached for run ID: {}. Automatically stopping emitters.", runDurationMinutes, capturedRunId);
+                    logger.info("Configured run duration of {} seconds reached for run ID: {}. Automatically stopping emitters.", runDurationSeconds, capturedRunId);
                     stopEmitters();
                     LoadTesterProperties currentProps = activeRunProperties.get();
                     if (currentProps != null && currentProps.getReporting() != null && currentProps.getReporting().getShutdown().isEnabled()) {
@@ -241,7 +241,7 @@ public class LoadEmitterService implements DisposableBean {
                         summaryReportingService.generateAndLogSummaryReport(capturedRunId);
                     }
                     finalizeRunSessionState();
-                }, runDurationMinutes, TimeUnit.MINUTES);
+                }, runDurationSeconds, TimeUnit.SECONDS);
             } else {
                 logger.info("Load test session (run ID: {}) configured to run indefinitely.", runId);
             }

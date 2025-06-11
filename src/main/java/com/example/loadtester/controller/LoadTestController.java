@@ -112,7 +112,7 @@ public class LoadTestController {
                                 return targetInfo;
                             }).collect(Collectors.toList()));
                 }
-                configMap.put("runDurationMinutesConfigured", effectiveProperties.getRunDurationMinutes());
+                configMap.put("runDurationSecondsConfigured", effectiveProperties.getRunDurationSeconds());
                 if (effectiveProperties.getReporting() != null && effectiveProperties.getReporting().getHistory() != null) {
                     configMap.put("historyDirectory", effectiveProperties.getReporting().getHistory().getDirectory());
                 }
@@ -215,7 +215,7 @@ public class LoadTestController {
             }
 
             LoadTesterProperties propertiesToUse = new LoadTesterProperties();
-            propertiesToUse.setRunDurationMinutes(startRequest.getRunDurationMinutes());
+            propertiesToUse.setRunDurationSeconds(startRequest.getRunDurationSeconds());
             propertiesToUse.setTargets(startRequest.getTargets());
             if (defaultLoadTesterProperties.getReporting() != null) {
                 propertiesToUse.setReporting(defaultLoadTesterProperties.getReporting());
@@ -233,7 +233,7 @@ public class LoadTestController {
                 }
             } else {
                 boolean isLikeDefault = true;
-                if(defaultLoadTesterProperties.getRunDurationMinutes() != startRequest.getRunDurationMinutes()) isLikeDefault = false;
+                if(defaultLoadTesterProperties.getRunDurationSeconds() != startRequest.getRunDurationSeconds()) isLikeDefault = false;
                 if(isLikeDefault && defaultLoadTesterProperties.getTargets() != null && defaultLoadTesterProperties.getTargets().size() == startRequest.getTargets().size()){
                 } else {
                     isLikeDefault = false;
@@ -241,8 +241,8 @@ public class LoadTestController {
                 if(isLikeDefault && !startRequest.getTargets().isEmpty()) loadedConfigName = "Default (with overrides)";
             }
 
-            logger.info("Effective configuration for this run: {} targets, duration {} mins.",
-                    propertiesToUse.getTargets().size(), propertiesToUse.getRunDurationMinutes());
+            logger.info("Effective configuration for this run: {} targets, duration {} secs.",
+                    propertiesToUse.getTargets().size(), propertiesToUse.getRunDurationSeconds());
 
 
             String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
@@ -254,7 +254,7 @@ public class LoadTestController {
             response.put("message", "Load test started successfully with run ID: " + runId + " using configuration: " + loadedConfigName);
             response.put("runId", runId);
             response.put("configName", loadedConfigName);
-            response.put("runDurationMinutes", propertiesToUse.getRunDurationMinutes()); // Crucial for progress bar
+            response.put("runDurationSeconds", propertiesToUse.getRunDurationSeconds()); // Crucial for progress bar
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("Error starting load test with custom parameters", e);
@@ -322,7 +322,7 @@ public class LoadTestController {
         response.put("currentConfigName", running ? loadEmitterService.getCurrentConfigName() : "N/A");
         // Optionally return active run duration if test is running
         if(running && loadEmitterService.getActiveRunProperties() != null) {
-            response.put("activeRunDurationMinutes", loadEmitterService.getActiveRunProperties().getRunDurationMinutes());
+            response.put("activeRunDurationSeconds", loadEmitterService.getActiveRunProperties().getRunDurationSeconds());
         }
         return ResponseEntity.ok(response);
     }

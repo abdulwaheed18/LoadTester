@@ -128,7 +128,7 @@ public class TestConfigurationService {
             dynamicProps.setReporting(new LoadTesterProperties.Reporting());
         }
 
-        dynamicProps.setRunDurationMinutes(userConfig.getRunDurationMinutes());
+        dynamicProps.setRunDurationSeconds(userConfig.getRunDurationSeconds());
 
         if (userConfig.getTargets() != null) {
             List<LoadTesterProperties.TargetEndpoint> propertyTargets = userConfig.getTargets().stream()

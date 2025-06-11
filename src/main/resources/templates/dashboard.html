@@ -207,7 +207,7 @@
                     <textarea id="configDescriptionInput" class="form-textarea" rows="2"></textarea>
                 </div>
                 <div>
-                    <label for="configRunDurationInput" class="form-label">Run Duration (minutes, 0 for indefinite):</label>
+                    <label for="configRunDurationInput" class="form-label">Run Duration (seconds, 0 for indefinite):</label>
                     <input type="number" id="configRunDurationInput" class="form-input" min="0" value="0">
                 </div>
                 <h5 class="text-md font-medium text-gray-700 mt-5 mb-3">Targets:</h5>
@@ -318,9 +318,9 @@
             let html = `<div class="config-section">`;
             html += `<div class="config-item"><span class="config-label">Active Config Source:</span> ${config.activeConfigurationName || 'Default'}</div>`;
             html += `<div class="config-item flex items-center space-x-2">
-                        <label for="globalRunDurationOverride" class="config-label">Run Duration (minutes):</label>
-                        <input type="number" id="globalRunDurationOverride" class="form-input-sm w-24" value="${config.runDurationMinutesConfigured > 0 ? config.runDurationMinutesConfigured : 0}" min="0">
-                        <span class="original-value">(Original: ${config.runDurationMinutesConfigured > 0 ? config.runDurationMinutesConfigured : 'Indefinite'})</span>
+                        <label for="globalRunDurationOverride" class="config-label">Run Duration (seconds):</label>
+                        <input type="number" id="globalRunDurationOverride" class="form-input-sm w-24" value="${config.runDurationSecondsConfigured > 0 ? config.runDurationSecondsConfigured : 0}" min="0">
+                        <span class="original-value">(Original: ${config.runDurationSecondsConfigured > 0 ? config.runDurationSecondsConfigured : 'Indefinite'})</span>
                      </div>`;
             html += `</div>`;
 
@@ -571,24 +571,24 @@
             }
 
             const globalRunDurationOverrideInput = document.getElementById('globalRunDurationOverride');
-            let runDurationMinutesForTest = 0;
+            let runDurationSecondsForTest = 0;
             if (globalRunDurationOverrideInput && globalRunDurationOverrideInput.value.trim() !== "") {
-                 runDurationMinutesForTest = parseInt(globalRunDurationOverrideInput.value, 10);
-                 if (isNaN(runDurationMinutesForTest) || runDurationMinutesForTest < 0) {
+                 runDurationSecondsForTest = parseInt(globalRunDurationOverrideInput.value, 10);
+                 if (isNaN(runDurationSecondsForTest) || runDurationSecondsForTest < 0) {
                     // Try to get original from config object if input is invalid
                     const configForDuration = originalTargetsData.length > 0 ? document.getElementById('configDisplaySection')._configData : null; // Store config data on element for access
-                    runDurationMinutesForTest = configForDuration ? (configForDuration.runDurationMinutesConfigured || 0) : 0;
+                    runDurationSecondsForTest = configForDuration ? (configForDuration.runDurationSecondsConfigured || 0) : 0;
                  }
             } else {
                 // Fallback to original value from the effectively loaded config (which renderConfigDetailsWithOverrides used)
                 const configForDuration = document.getElementById('configDisplaySection')._configData; // Need to store this
-                runDurationMinutesForTest = configForDuration ? (configForDuration.runDurationMinutesConfigured || 0) : 0;
+                runDurationSecondsForTest = configForDuration ? (configForDuration.runDurationSecondsConfigured || 0) : 0;
             }
 
 
             const startPayload = {
                 baseConfigurationId: selectedConfigId || null,
-                runDurationMinutes: runDurationMinutesForTest,
+                runDurationSeconds: runDurationSecondsForTest,
                 targets: targetsToRun
             };
 
@@ -599,15 +599,15 @@
                     headers: { 'Content-Type': 'application/json'},
                     body: JSON.stringify(startPayload)
                 });
-                const data = await response.json(); // Assuming backend returns runDurationMinutesUsed
+                const data = await response.json(); // Assuming backend returns runDurationSecondsUsed
                 if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
 
                 showToast(data.message || 'Test started successfully.', 'success');
                 if(data.runId) currentRunIdLabel.textContent = data.runId;
 
                 // Setup duration progress bar
-                if (data.runDurationMinutes && data.runDurationMinutes > 0) { // Check if backend confirmed a duration
-                    configuredTestDurationSeconds = data.runDurationMinutes * 60;
+                if (data.runDurationSeconds && data.runDurationSeconds > 0) { // Check if backend confirmed a duration
+                    configuredTestDurationSeconds = data.runDurationSeconds;
                     testStartTime = Date.now();
                     if(testDurationProgressContainer) testDurationProgressContainer.classList.remove('hidden');
                     if(totalDurationLabel) totalDurationLabel.textContent = formatTime(configuredTestDurationSeconds);
@@ -728,7 +728,7 @@
                 configIdInput.value = config.id;
                 configNameInput.value = config.name;
                 configDescriptionInput.value = config.description || '';
-                configRunDurationInput.value = config.runDurationMinutes === undefined ? 0 : config.runDurationMinutes;
+                configRunDurationInput.value = config.runDurationSeconds === undefined ? 0 : config.runDurationSeconds;
 
                 targetsContainer.innerHTML = '';
                 (config.targets || []).forEach(addTargetToForm);
@@ -856,7 +856,7 @@
                 id: configIdInput.value || null,
                 name: configNameInput.value,
                 description: configDescriptionInput.value,
-                runDurationMinutes: parseInt(configRunDurationInput.value, 10) || 0,
+                runDurationSeconds: parseInt(configRunDurationInput.value, 10) || 0,
                 targets: []
             };
 

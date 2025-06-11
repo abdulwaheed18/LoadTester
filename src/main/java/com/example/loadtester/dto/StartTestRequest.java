@@ -13,16 +13,16 @@ import java.util.List;
 public class StartTestRequest {
 
     private String baseConfigurationId; // Optional: ID of the saved config this run is based on (for logging/context)
-    private int runDurationMinutes;
+    private int runDurationSeconds;
     private List<LoadTesterProperties.TargetEndpoint> targets; // The actual list of targets to run, with overrides applied
 
     // Default constructor for Jackson
     public StartTestRequest() {
     }
 
-    public StartTestRequest(String baseConfigurationId, int runDurationMinutes, List<LoadTesterProperties.TargetEndpoint> targets) {
+    public StartTestRequest(String baseConfigurationId, int runDurationSeconds, List<LoadTesterProperties.TargetEndpoint> targets) {
         this.baseConfigurationId = baseConfigurationId;
-        this.runDurationMinutes = runDurationMinutes;
+        this.runDurationSeconds = runDurationSeconds;
         this.targets = targets;
     }
 
@@ -35,12 +35,12 @@ public class StartTestRequest {
         this.baseConfigurationId = baseConfigurationId;
     }
 
-    public int getRunDurationMinutes() {
-        return runDurationMinutes;
+    public int getRunDurationSeconds() {
+        return runDurationSeconds;
     }
 
-    public void setRunDurationMinutes(int runDurationMinutes) {
-        this.runDurationMinutes = runDurationMinutes;
+    public void setRunDurationSeconds(int runDurationSeconds) {
+        this.runDurationSeconds = runDurationSeconds;
     }
 
     public List<LoadTesterProperties.TargetEndpoint> getTargets() {
@@ -55,7 +55,7 @@ public class StartTestRequest {
     public String toString() {
         return "StartTestRequest{" +
                 "baseConfigurationId='" + baseConfigurationId + '\'' +
-                ", runDurationMinutes=" + runDurationMinutes +
+                ", runDurationSeconds=" + runDurationSeconds +
                 ", targetsCount=" + (targets != null ? targets.size() : 0) +
                 '}';
     }

@@ -30,6 +30,6 @@ public class LoadTesterApplication {
         // managed by LoadEmitterService when started from the UI.
 
         logger.info("LoadTesterApplication started. It will run until manually stopped.");
-        logger.info("The 'runDurationMinutes' property now controls the duration of a load test session initiated via the UI.");
+        logger.info("The 'runDurationSeconds' property now controls the duration of a load test session initiated via the UI.");
     }
 }

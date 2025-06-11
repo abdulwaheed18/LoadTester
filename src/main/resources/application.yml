@@ -3,7 +3,7 @@ spring:
     name: loadtester # Sets a global tag for metrics
 
 loadtester:
-  runDurationMinutes: 1 # Application will run for X minutes then shutdown (if old logic is still present). 0 or negative means run indefinitely.
+  runDurationSeconds: 60 # Application will run for X minutes then shutdown (if old logic is still present). 0 or negative means run indefinitely.
   # For new UI-driven runs, this can be overridden by TestConfiguration.
   targets: # This becomes the "default" configuration if no user-defined config is selected
     - name: API-1-Default-From-YML

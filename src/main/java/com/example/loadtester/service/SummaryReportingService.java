@@ -242,7 +242,7 @@ public class SummaryReportingService {
         Context context = new Context();
         context.setVariable("reportTimestamp", reportTimestamp);
         context.setVariable("runId", runId);
-        context.setVariable("runDurationMinutes", properties.getRunDurationMinutes());
+        context.setVariable("runDurationSeconds", properties.getRunDurationSeconds());
         context.setVariable("targetReports", metricsDataList);
 
         // Standardized HTML report filename within the run-specific directory
